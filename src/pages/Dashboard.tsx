@@ -26,11 +26,11 @@ const sidebarItems = [
 ];
 
 const Dashboard = () => {
+  const { user, signOut } = useAuth();
   const [activeItem, setActiveItem] = useState("Overview");
   const [stats, setStats] = useState({ templates: 0, certificates: 0, verifications: 0, batches: 0 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
