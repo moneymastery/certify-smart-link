@@ -14,13 +14,358 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      certificate_batches: {
+        Row: {
+          created_at: string
+          created_by: string
+          csv_file_url: string | null
+          generated_count: number
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          template_id: string
+          total_count: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          csv_file_url?: string | null
+          generated_count?: number
+          id?: string
+          name: string
+          organization_id: string
+          status?: string
+          template_id: string
+          total_count?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          csv_file_url?: string | null
+          generated_count?: number
+          id?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          template_id?: string
+          total_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificate_batches_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificate_batches_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificate_verifications: {
+        Row: {
+          certificate_id: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          verified_at: string
+        }
+        Insert: {
+          certificate_id: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          verified_at?: string
+        }
+        Update: {
+          certificate_id?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          verified_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificate_verifications_certificate_id_fkey"
+            columns: ["certificate_id"]
+            isOneToOne: false
+            referencedRelation: "certificates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certificates: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          id: string
+          issued_at: string
+          organization_id: string
+          pdf_url: string | null
+          qr_code_url: string | null
+          recipient_data: Json
+          recipient_email: string | null
+          recipient_name: string
+          revoked_at: string | null
+          serial_number: string
+          status: string
+          template_id: string
+          updated_at: string
+          verification_token: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string
+          organization_id: string
+          pdf_url?: string | null
+          qr_code_url?: string | null
+          recipient_data?: Json
+          recipient_email?: string | null
+          recipient_name: string
+          revoked_at?: string | null
+          serial_number: string
+          status?: string
+          template_id: string
+          updated_at?: string
+          verification_token?: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string
+          organization_id?: string
+          pdf_url?: string | null
+          qr_code_url?: string | null
+          recipient_data?: Json
+          recipient_email?: string | null
+          recipient_name?: string
+          revoked_at?: string | null
+          serial_number?: string
+          status?: string
+          template_id?: string
+          updated_at?: string
+          verification_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "certificate_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          owner_id: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          owner_id: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          owner_id?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      template_fields: {
+        Row: {
+          created_at: string
+          field_key: string
+          font_color: string
+          font_family: string
+          font_size: number
+          id: string
+          label: string
+          max_width: number | null
+          sort_order: number
+          template_id: string
+          text_align: string
+          x_position: number
+          y_position: number
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          font_color?: string
+          font_family?: string
+          font_size?: number
+          id?: string
+          label: string
+          max_width?: number | null
+          sort_order?: number
+          template_id: string
+          text_align?: string
+          x_position?: number
+          y_position?: number
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          font_color?: string
+          font_family?: string
+          font_size?: number
+          id?: string
+          label?: string
+          max_width?: number | null
+          sort_order?: number
+          template_id?: string
+          text_align?: string
+          x_position?: number
+          y_position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_fields_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      templates: {
+        Row: {
+          background_url: string | null
+          created_at: string
+          created_by: string
+          height_px: number
+          id: string
+          logo_url: string | null
+          name: string
+          organization_id: string
+          seal_url: string | null
+          signature_url: string | null
+          updated_at: string
+          width_px: number
+        }
+        Insert: {
+          background_url?: string | null
+          created_at?: string
+          created_by: string
+          height_px?: number
+          id?: string
+          logo_url?: string | null
+          name: string
+          organization_id: string
+          seal_url?: string | null
+          signature_url?: string | null
+          updated_at?: string
+          width_px?: number
+        }
+        Update: {
+          background_url?: string | null
+          created_at?: string
+          created_by?: string
+          height_px?: number
+          id?: string
+          logo_url?: string | null
+          name?: string
+          organization_id?: string
+          seal_url?: string | null
+          signature_url?: string | null
+          updated_at?: string
+          width_px?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_org_admin: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_org_member: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
