@@ -15,15 +15,20 @@ interface BatchRow {
   recipientData: Record<string, string>;
 }
 
+interface GeneratedCertificateFile {
+  serialNumber: string;
+  recipientName: string;
+  pdfUrl: string;
+  pdfBlob?: Blob;
+}
+
 interface GenerationResult {
   success: number;
   failed: number;
-  certificates: {
-    serialNumber: string;
-    recipientName: string;
-    pdfBlob: Blob;
-  }[];
+  certificates: GeneratedCertificateFile[];
 }
+
+const yieldToBrowser = () => new Promise((resolve) => window.setTimeout(resolve, 0));
 
 export const useCertificateGeneration = () => {
   const [generating, setGenerating] = useState(false);
@@ -37,7 +42,6 @@ export const useCertificateGeneration = () => {
       organizationId: string,
       templateId: string,
       batchId: string
-
     ): Promise<GenerationResult> => {
       setGenerating(true);
       setTotal(rows.length);
@@ -56,10 +60,9 @@ export const useCertificateGeneration = () => {
             recipientEmail: row.recipientEmail,
             recipientData: row.recipientData,
             serialNumber,
-            verificationToken: "", // Will be set by DB default
+            verificationToken: "",
           };
 
-          // Insert certificate record first to get the verification token
           const { data: certRecord, error: insertError } = await supabase
             .from("certificates")
             .insert({
@@ -82,12 +85,10 @@ export const useCertificateGeneration = () => {
             continue;
           }
 
-          // Generate PDF with real verification token
           certData.verificationToken = certRecord.verification_token;
           const pdfBytes = await generateCertificatePDF(certData, config, verifyBaseUrl);
-          const pdfBlob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+          const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
 
-          // Upload PDF to storage
           const pdfPath = `${organizationId}/${batchId}/${certRecord.id}.pdf`;
           const { error: uploadError } = await supabase.storage
             .from("generated-certificates")
@@ -100,22 +101,29 @@ export const useCertificateGeneration = () => {
             continue;
           }
 
-          // Get public URL
           const { data: urlData } = supabase.storage
             .from("generated-certificates")
             .getPublicUrl(pdfPath);
 
-          // Update certificate with PDF URL
-          await supabase
+          const pdfUrl = urlData.publicUrl;
+
+          const { error: updateError } = await supabase
             .from("certificates")
-            .update({ pdf_url: urlData.publicUrl })
+            .update({ pdf_url: pdfUrl })
             .eq("id", certRecord.id);
+
+          if (updateError) {
+            console.error("Certificate update error:", updateError);
+            results.failed++;
+            setProgress(i + 1);
+            continue;
+          }
 
           results.success++;
           results.certificates.push({
             serialNumber,
             recipientName: row.recipientName,
-            pdfBlob,
+            pdfUrl,
           });
         } catch (err) {
           console.error("Generation error for", row.recipientName, err);
@@ -123,9 +131,19 @@ export const useCertificateGeneration = () => {
         }
 
         setProgress(i + 1);
+
+        if ((i + 1) % 5 === 0) {
+          await supabase
+            .from("certificate_batches")
+            .update({
+              status: "processing",
+              generated_count: results.success,
+            })
+            .eq("id", batchId);
+          await yieldToBrowser();
+        }
       }
 
-      // Update batch status
       await supabase
         .from("certificate_batches")
         .update({
@@ -141,14 +159,26 @@ export const useCertificateGeneration = () => {
   );
 
   const downloadBatchAsZip = useCallback(
-    async (
-      certificates: { serialNumber: string; recipientName: string; pdfBlob: Blob }[],
-      batchName: string
-    ) => {
+    async (certificates: GeneratedCertificateFile[], batchName: string) => {
       const zip = new JSZip();
-      for (const cert of certificates) {
+
+      for (let i = 0; i < certificates.length; i++) {
+        const cert = certificates[i];
         const safeName = cert.recipientName.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_");
-        zip.file(`${safeName}_${cert.serialNumber}.pdf`, cert.pdfBlob);
+        const pdfBlob =
+          cert.pdfBlob ??
+          (await fetch(cert.pdfUrl).then(async (response) => {
+            if (!response.ok) {
+              throw new Error(`Failed to fetch certificate for ${cert.recipientName}`);
+            }
+            return response.blob();
+          }));
+
+        zip.file(`${safeName}_${cert.serialNumber}.pdf`, pdfBlob);
+
+        if ((i + 1) % 5 === 0) {
+          await yieldToBrowser();
+        }
       }
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
