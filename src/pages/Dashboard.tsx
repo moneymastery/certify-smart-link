@@ -75,7 +75,7 @@ const Dashboard = () => {
       if (batchData) setBatches(batchData);
     };
     load();
-  }, []);
+  }, [user]);
 
   const statCards = [
     { label: "Templates", value: stats.templates, icon: Upload },
@@ -83,18 +83,6 @@ const Dashboard = () => {
     { label: "Verifications", value: stats.verifications, icon: QrCode },
     { label: "Batches", value: stats.batches, icon: FileText },
   ];
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <ShieldCheck className="h-12 w-12 text-accent mx-auto" />
-          <h2 className="font-heading text-xl font-bold text-foreground">Please sign in</h2>
-          <Button variant="hero" asChild><Link to="/login">Sign In</Link></Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex">
