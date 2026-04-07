@@ -12,9 +12,12 @@ import {
   Award,
   Download,
   Eye,
+  LogOut,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Overview" },
@@ -23,16 +26,14 @@ const sidebarItems = [
 ];
 
 const Dashboard = () => {
+  const { user, signOut } = useAuth();
   const [activeItem, setActiveItem] = useState("Overview");
   const [stats, setStats] = useState({ templates: 0, certificates: 0, verifications: 0, batches: 0 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
       if (!user) return;
 
       // Get org
@@ -74,7 +75,7 @@ const Dashboard = () => {
       if (batchData) setBatches(batchData);
     };
     load();
-  }, []);
+  }, [user]);
 
   const statCards = [
     { label: "Templates", value: stats.templates, icon: Upload },
@@ -82,18 +83,6 @@ const Dashboard = () => {
     { label: "Verifications", value: stats.verifications, icon: QrCode },
     { label: "Batches", value: stats.batches, icon: FileText },
   ];
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <ShieldCheck className="h-12 w-12 text-accent mx-auto" />
-          <h2 className="font-heading text-xl font-bold text-foreground">Please sign in</h2>
-          <Button variant="hero" asChild><Link to="/login">Sign In</Link></Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -128,12 +117,20 @@ const Dashboard = () => {
       <main className="flex-1 overflow-auto">
         <header className="h-16 border-b border-border flex items-center justify-between px-6">
           <h1 className="font-heading text-xl font-semibold text-foreground">{activeItem}</h1>
-          <Button variant="hero" size="sm" asChild>
-            <Link to="/generate">
-              <Plus className="h-4 w-4" />
-              Generate Certificates
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/templates/new">
+                <Plus className="h-4 w-4" />
+                New Template
+              </Link>
+            </Button>
+            <Button variant="hero" size="sm" asChild>
+              <Link to="/generate">
+                <Plus className="h-4 w-4" />
+                Generate Certificates
+              </Link>
+            </Button>
+          </div>
         </header>
 
         <div className="p-6 space-y-8">
