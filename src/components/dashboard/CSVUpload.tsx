@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -13,15 +14,59 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const parseFile = useCallback(
-    (file: File) => {
-      setError(null);
-      if (!file.name.endsWith(".csv")) {
-        setError("Please upload a .csv file");
+  const processRows = useCallback(
+    (headers: string[], rows: Record<string, string>[]) => {
+      if (rows.length === 0) {
+        setError("File is empty or has no data rows");
         return;
       }
-      setFileName(file.name);
+      if (!headers.some((h) => h.toLowerCase().includes("name"))) {
+        setError('File must have a column containing "name" (e.g. recipient_name, name, full_name)');
+        return;
+      }
+      setRowCount(rows.length);
+      onDataParsed(headers, rows);
+    },
+    [onDataParsed]
+  );
 
+  const parseExcel = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
+
+          if (jsonData.length === 0) {
+            setError("Spreadsheet is empty");
+            return;
+          }
+
+          const headers = Object.keys(jsonData[0]).map((h) => String(h).trim());
+          const rows = jsonData.map((row) => {
+            const cleaned: Record<string, string> = {};
+            for (const key of headers) {
+              cleaned[key] = String(row[key] ?? "").trim();
+            }
+            return cleaned;
+          });
+
+          processRows(headers, rows);
+        } catch {
+          setError("Failed to parse spreadsheet. Please check the file format.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    },
+    [processRows]
+  );
+
+  const parseCSV = useCallback(
+    (file: File) => {
       Papa.parse<Record<string, string>>(file, {
         header: true,
         skipEmptyLines: "greedy",
@@ -34,21 +79,35 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
             setError(`CSV parse error: ${fatalErrors[0].message}`);
             return;
           }
-          if (results.data.length === 0) {
-            setError("CSV file is empty");
-            return;
-          }
           const headers = results.meta.fields || [];
-          if (!headers.some((h) => h.toLowerCase().includes("name"))) {
-            setError('CSV must have a column containing "name" (e.g. recipient_name, name, full_name)');
-            return;
-          }
-          setRowCount(results.data.length);
-          onDataParsed(headers, results.data);
+          processRows(headers, results.data);
         },
       });
     },
-    [onDataParsed]
+    [processRows]
+  );
+
+  const parseFile = useCallback(
+    (file: File) => {
+      setError(null);
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      const isExcel = ext === "xlsx" || ext === "xls" || ext === "ods";
+      const isCsv = ext === "csv";
+
+      if (!isExcel && !isCsv) {
+        setError("Please upload a .csv, .xlsx, or .xls file");
+        return;
+      }
+
+      setFileName(file.name);
+
+      if (isExcel) {
+        parseExcel(file);
+      } else {
+        parseCSV(file);
+      }
+    },
+    [parseExcel, parseCSV]
   );
 
   const handleDrop = useCallback(
@@ -94,14 +153,14 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
             <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
             <div>
               <p className="text-sm font-medium text-foreground">
-                Drop your CSV file here
+                Drop your file here
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Must include a "name" column. Other columns (email, course, date, etc.) are optional.
+                Supports CSV, XLSX, and XLS. Must include a "name" column.
               </p>
             </div>
             <label>
-              <input type="file" accept=".csv" onChange={handleFileInput} className="hidden" />
+              <input type="file" accept=".csv,.xlsx,.xls,.ods" onChange={handleFileInput} className="hidden" />
               <Button variant="outline" size="sm" asChild>
                 <span>
                   <FileText className="h-4 w-4" />
