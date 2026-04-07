@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import {
   ShieldCheck,
   ArrowLeft,
-  Upload,
   FileText,
   Loader2,
   Download,
@@ -18,10 +17,19 @@ import CSVUpload from "@/components/dashboard/CSVUpload";
 import { useCertificateGeneration } from "@/hooks/use-certificate-generation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Step = "upload" | "configure" | "generating" | "complete";
 
+type GeneratedCertificate = {
+  serialNumber: string;
+  recipientName: string;
+  pdfUrl: string;
+  pdfBlob?: Blob;
+};
+
 const GenerateCertificates = () => {
+  const { user } = useAuth();
   const [step, setStep] = useState<Step>("upload");
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
@@ -29,56 +37,57 @@ const GenerateCertificates = () => {
   const [orgName, setOrgName] = useState("");
   const [nameColumn, setNameColumn] = useState("");
   const [emailColumn, setEmailColumn] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [setupLoading, setSetupLoading] = useState(true);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
-  const [generatedCerts, setGeneratedCerts] = useState<
-    { serialNumber: string; recipientName: string; pdfBlob: Blob }[]
-  >([]);
+  const [generatedCerts, setGeneratedCerts] = useState<GeneratedCertificate[]>([]);
 
-  // Get or create org + template for the current user
   useEffect(() => {
+    if (!user) return;
+
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
+      setSetupLoading(true);
+      setSetupError(null);
 
-      // Get or create org
-      let { data: orgs } = await supabase
-        .from("organizations")
-        .select("id, name")
-        .limit(1);
-
-      let org = orgs?.[0];
-      if (!org) {
-        const slug = `org-${user.id.substring(0, 8)}`;
-        const { data: newOrg } = await supabase
+      try {
+        const { data: orgs, error: orgLookupError } = await supabase
           .from("organizations")
-          .insert({ name: "My Organization", slug, owner_id: user.id })
           .select("id, name")
-          .single();
-        org = newOrg;
-      }
+          .limit(1);
 
-      if (org) {
+        if (orgLookupError) throw orgLookupError;
+
+        let org = orgs?.[0];
+        if (!org) {
+          const slug = `org-${user.id.substring(0, 8)}`;
+          const { data: newOrg, error: orgInsertError } = await supabase
+            .from("organizations")
+            .insert({ name: "My Organization", slug, owner_id: user.id })
+            .select("id, name")
+            .single();
+
+          if (orgInsertError || !newOrg) throw orgInsertError ?? new Error("Could not create organization");
+          org = newOrg;
+        }
+
         setOrgId(org.id);
         setOrgName(org.name);
-      }
 
-      // Get or create template
-      if (org) {
-        let { data: templates } = await supabase
+        const { data: templates, error: templateLookupError } = await supabase
           .from("templates")
           .select("id")
           .eq("organization_id", org.id)
           .limit(1);
 
+        if (templateLookupError) throw templateLookupError;
+
         let tmpl = templates?.[0];
         if (!tmpl) {
-          const { data: newTmpl } = await supabase
+          const { data: newTemplate, error: templateInsertError } = await supabase
             .from("templates")
             .insert({
               organization_id: org.id,
@@ -89,39 +98,66 @@ const GenerateCertificates = () => {
             })
             .select("id")
             .single();
-          tmpl = newTmpl;
+
+          if (templateInsertError || !newTemplate) {
+            throw templateInsertError ?? new Error("Could not create template");
+          }
+          tmpl = newTemplate;
         }
 
-        if (tmpl) setTemplateId(tmpl.id);
+        setTemplateId(tmpl.id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not prepare certificate generation.";
+        setSetupError(message);
+        toast({ title: "Setup error", description: message, variant: "destructive" });
+      } finally {
+        setSetupLoading(false);
       }
     };
+
     init();
-  }, []);
+  }, [user]);
 
   const handleDataParsed = (headers: string[], rows: Record<string, string>[]) => {
     setCsvHeaders(headers);
     setCsvRows(rows);
-    // Auto-detect name & email columns
+
     const nameCandidates = headers.filter((h) =>
       ["name", "recipient_name", "full_name", "student_name"].includes(h.toLowerCase())
     );
     if (nameCandidates.length > 0) setNameColumn(nameCandidates[0]);
+
     const emailCandidates = headers.filter((h) =>
       ["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
+
     setStep("configure");
   };
 
   const handleGenerate = async () => {
-    if (!orgId || !templateId || !userId || !nameColumn) {
+    if (setupLoading) {
+      toast({ title: "Please wait", description: "Preparing your organization and template." });
+      return;
+    }
+
+    if (setupError) {
+      toast({ title: "Setup incomplete", description: setupError, variant: "destructive" });
+      return;
+    }
+
+    if (!orgId || !templateId || !user?.id || !nameColumn) {
       toast({ title: "Error", description: "Missing configuration. Please check all fields.", variant: "destructive" });
+      return;
+    }
+
+    if (csvRows.length === 0) {
+      toast({ title: "No recipients found", description: "Upload a file with at least one row.", variant: "destructive" });
       return;
     }
 
     setStep("generating");
 
-    // Create batch record
     const { data: batch, error: batchError } = await supabase
       .from("certificate_batches")
       .insert({
@@ -130,7 +166,7 @@ const GenerateCertificates = () => {
         name: batchName || `Batch ${new Date().toLocaleDateString()}`,
         total_count: csvRows.length,
         status: "processing",
-        created_by: userId,
+        created_by: user.id,
       })
       .select("id")
       .single();
@@ -141,17 +177,15 @@ const GenerateCertificates = () => {
       return;
     }
 
-    // Prepare rows
     const batchRows = csvRows.map((row) => ({
       recipientName: row[nameColumn] || "Unknown",
       recipientEmail: emailColumn ? row[emailColumn] : undefined,
       recipientData: row,
     }));
 
-    // Extra fields from CSV (besides name/email)
     const extraFields = csvHeaders
       .filter((h) => h !== nameColumn && h !== emailColumn)
-      .map((h, i) => ({
+      .map((h) => ({
         fieldKey: h,
         label: h.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         xPosition: 0,
@@ -189,6 +223,16 @@ const GenerateCertificates = () => {
     }
   };
 
+  const downloadSingleCertificate = async (cert: GeneratedCertificate) => {
+    const blob = cert.pdfBlob ?? (await fetch(cert.pdfUrl).then((response) => response.blob()));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${cert.recipientName.replace(/\s+/g, "_")}_${cert.serialNumber}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const progressPercent = total > 0 ? (progress / total) * 100 : 0;
 
   return (
@@ -207,8 +251,7 @@ const GenerateCertificates = () => {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-2xl px-6 py-10">
-        {/* Step indicator */}
+      <main className="container mx-auto max-w-5xl px-6 py-10">
         <div className="flex items-center gap-2 mb-10">
           {(["upload", "configure", "generating", "complete"] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center gap-2">
@@ -230,18 +273,17 @@ const GenerateCertificates = () => {
           ))}
         </div>
 
-        {/* Step: Upload */}
         {step === "upload" && (
           <div className="space-y-6">
             <div>
               <h2 className="font-heading text-2xl font-bold text-foreground">Upload Recipients</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Upload a CSV file with your certificate recipients.
+                Upload a CSV or spreadsheet with your certificate recipients.
               </p>
             </div>
             <CSVUpload onDataParsed={handleDataParsed} />
             <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <p className="text-xs font-medium text-foreground mb-2">Example CSV format:</p>
+              <p className="text-xs font-medium text-foreground mb-2">Example format:</p>
               <pre className="text-xs text-muted-foreground font-mono">
 {`name,email,course,date
 John Doe,john@example.com,Web Development,2026-04-07
@@ -251,15 +293,36 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
           </div>
         )}
 
-        {/* Step: Configure */}
         {step === "configure" && (
           <div className="space-y-6">
             <div>
               <h2 className="font-heading text-2xl font-bold text-foreground">Configure Batch</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Map your CSV columns and name this batch.
+                Map your file columns, review all recipients, and start generation.
               </p>
             </div>
+
+            {(setupLoading || setupError) && (
+              <div className={`rounded-lg border p-4 flex items-start gap-3 ${
+                setupError
+                  ? "border-destructive/30 bg-destructive/5"
+                  : "border-border bg-muted/30"
+              }`}>
+                {setupError ? (
+                  <AlertCircle className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
+                ) : (
+                  <Loader2 className="h-4 w-4 mt-0.5 text-accent shrink-0 animate-spin" />
+                )}
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {setupError ? "Setup problem" : "Preparing your workspace"}
+                  </p>
+                  <p className={`text-xs ${setupError ? "text-destructive" : "text-muted-foreground"}`}>
+                    {setupError ?? "Creating your organization and template so large batches can run cleanly."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="space-y-2">
@@ -280,54 +343,60 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Name Column *</Label>
-                <select
-                  value={nameColumn}
-                  onChange={(e) => setNameColumn(e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">Select column...</option>
-                  {csvHeaders.map((h) => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
-              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Name Column *</Label>
+                  <select
+                    value={nameColumn}
+                    onChange={(e) => setNameColumn(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">Select column...</option>
+                    {csvHeaders.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="space-y-2">
-                <Label>Email Column (optional)</Label>
-                <select
-                  value={emailColumn}
-                  onChange={(e) => setEmailColumn(e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="">None</option>
-                  {csvHeaders.map((h) => (
-                    <option key={h} value={h}>{h}</option>
-                  ))}
-                </select>
+                <div className="space-y-2">
+                  <Label>Email Column (optional)</Label>
+                  <select
+                    value={emailColumn}
+                    onChange={(e) => setEmailColumn(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">None</option>
+                    {csvHeaders.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
-            {/* Preview */}
             <div className="rounded-lg border border-border overflow-hidden">
-              <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground">
-                Preview ({csvRows.length} recipients)
+              <div className="bg-muted px-4 py-2 flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-muted-foreground">Preview ({csvRows.length} recipients)</span>
+                <span className="text-xs text-muted-foreground">Showing all uploaded rows</span>
               </div>
-              <div className="max-h-48 overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      {csvHeaders.slice(0, 5).map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">{h}</th>
+              <div className="max-h-[28rem] overflow-auto">
+                <table className="w-full min-w-max text-sm">
+                  <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
+                    <tr className="border-b border-border">
+                      {csvHeaders.map((h) => (
+                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
+                          {h}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {csvRows.slice(0, 5).map((row, i) => (
-                      <tr key={i} className="border-b border-border">
-                        {csvHeaders.slice(0, 5).map((h) => (
-                          <td key={h} className="px-3 py-2 text-xs text-foreground">{row[h]}</td>
+                    {csvRows.map((row, i) => (
+                      <tr key={`${i}-${row[nameColumn] ?? i}`} className="border-b border-border even:bg-muted/20">
+                        {csvHeaders.map((h) => (
+                          <td key={h} className="px-3 py-2 text-xs text-foreground whitespace-nowrap">
+                            {row[h] || "—"}
+                          </td>
                         ))}
                       </tr>
                     ))}
@@ -340,15 +409,18 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               <Button variant="outline" onClick={() => setStep("upload")}>
                 Back
               </Button>
-              <Button variant="hero" onClick={handleGenerate} disabled={!nameColumn || !orgId}>
-                <FileText className="h-4 w-4" />
-                Generate {csvRows.length} Certificates
+              <Button
+                variant="hero"
+                onClick={handleGenerate}
+                disabled={!nameColumn || !orgId || !templateId || setupLoading || generating}
+              >
+                {setupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                {setupLoading ? "Preparing..." : `Generate ${csvRows.length} Certificates`}
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step: Generating */}
         {step === "generating" && (
           <div className="space-y-6 text-center py-12">
             <Loader2 className="h-12 w-12 text-accent mx-auto animate-spin" />
@@ -360,12 +432,11 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
             <Progress value={progressPercent} className="max-w-sm mx-auto" />
             <p className="text-xs text-muted-foreground">
-              Each certificate gets a unique serial number and QR code
+              Large batches are processed progressively so the page stays responsive.
             </p>
           </div>
         )}
 
-        {/* Step: Complete */}
         {step === "complete" && (
           <div className="space-y-6 text-center py-12">
             <CheckCircle className="h-16 w-16 text-accent mx-auto" />
@@ -390,29 +461,21 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </Button>
             </div>
 
-            {/* Certificate list */}
-            <div className="rounded-lg border border-border overflow-hidden text-left mt-8 max-w-lg mx-auto">
+            <div className="rounded-lg border border-border overflow-hidden text-left mt-8 max-w-2xl mx-auto w-full">
               <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground">
                 Generated Certificates
               </div>
               <div className="max-h-64 overflow-auto divide-y divide-border">
                 {generatedCerts.map((cert) => (
-                  <div key={cert.serialNumber} className="px-4 py-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{cert.recipientName}</p>
+                  <div key={cert.serialNumber} className="px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{cert.recipientName}</p>
                       <p className="text-xs text-muted-foreground">{cert.serialNumber}</p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        const url = URL.createObjectURL(cert.pdfBlob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${cert.recipientName.replace(/\s+/g, "_")}_${cert.serialNumber}.pdf`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
+                      onClick={() => downloadSingleCertificate(cert)}
                     >
                       <Download className="h-3.5 w-3.5" />
                     </Button>
