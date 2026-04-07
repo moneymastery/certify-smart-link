@@ -34,8 +34,6 @@ const Dashboard = () => {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
       if (!user) return;
 
       // Get org
