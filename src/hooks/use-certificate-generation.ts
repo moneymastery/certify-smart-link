@@ -36,8 +36,8 @@ export const useCertificateGeneration = () => {
       config: GenerationConfig,
       organizationId: string,
       templateId: string,
-      batchId: string,
-      userId: string
+      batchId: string
+
     ): Promise<GenerationResult> => {
       setGenerating(true);
       setTotal(rows.length);
@@ -85,7 +85,7 @@ export const useCertificateGeneration = () => {
           // Generate PDF with real verification token
           certData.verificationToken = certRecord.verification_token;
           const pdfBytes = await generateCertificatePDF(certData, config, verifyBaseUrl);
-          const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+          const pdfBlob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: "application/pdf" });
 
           // Upload PDF to storage
           const pdfPath = `${organizationId}/${batchId}/${certRecord.id}.pdf`;
