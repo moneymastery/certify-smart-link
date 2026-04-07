@@ -117,12 +117,20 @@ const Dashboard = () => {
       <main className="flex-1 overflow-auto">
         <header className="h-16 border-b border-border flex items-center justify-between px-6">
           <h1 className="font-heading text-xl font-semibold text-foreground">{activeItem}</h1>
-          <Button variant="hero" size="sm" asChild>
-            <Link to="/generate">
-              <Plus className="h-4 w-4" />
-              Generate Certificates
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/templates/new">
+                <Plus className="h-4 w-4" />
+                New Template
+              </Link>
+            </Button>
+            <Button variant="hero" size="sm" asChild>
+              <Link to="/generate">
+                <Plus className="h-4 w-4" />
+                Generate Certificates
+              </Link>
+            </Button>
+          </div>
         </header>
 
         <div className="p-6 space-y-8">
