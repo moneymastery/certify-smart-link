@@ -12,9 +12,12 @@ import {
   Award,
   Download,
   Eye,
+  LogOut,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Overview" },
