@@ -24,10 +24,14 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
 
       Papa.parse<Record<string, string>>(file, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: "greedy",
+        transformHeader: (h) => h.trim(),
         complete: (results) => {
-          if (results.errors.length > 0) {
-            setError(`CSV parse error: ${results.errors[0].message}`);
+          const fatalErrors = results.errors.filter(
+            (e) => e.type !== "FieldMismatch"
+          );
+          if (fatalErrors.length > 0) {
+            setError(`CSV parse error: ${fatalErrors[0].message}`);
             return;
           }
           if (results.data.length === 0) {
