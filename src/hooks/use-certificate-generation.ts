@@ -86,8 +86,9 @@ export const useCertificateGeneration = () => {
           }
 
           certData.verificationToken = certRecord.verification_token;
-          const pdfBytes = await generateCertificatePDF(certData, config, verifyBaseUrl);
-          const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
+          const pdfBuffer = new Uint8Array(pdfBytes.length);
+          pdfBuffer.set(pdfBytes);
+          const pdfBlob = new Blob([pdfBuffer.buffer], { type: "application/pdf" });
 
           const pdfPath = `${organizationId}/${batchId}/${certRecord.id}.pdf`;
           const { error: uploadError } = await supabase.storage
