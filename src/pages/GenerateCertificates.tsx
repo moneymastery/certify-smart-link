@@ -161,6 +161,15 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
+    // Fetch selected template data + fields
+    const [templateResult, fieldsResult] = await Promise.all([
+      supabase.from("templates").select("*").eq("id", templateId).single(),
+      supabase.from("template_fields").select("*").eq("template_id", templateId).order("sort_order"),
+    ]);
+
+    const tmplData = templateResult.data;
+    const tmplFields = fieldsResult.data || [];
+
     const { data: batch, error: batchError } = await supabase
       .from("certificate_batches")
       .insert({
@@ -186,13 +195,27 @@ const GenerateCertificates = () => {
       recipientData: row,
     }));
 
+    // Build fields config: use saved template fields, then fill in any CSV columns not already mapped
+    const savedFieldKeys = new Set(tmplFields.map((f: any) => f.field_key));
+    const mappedFields = tmplFields.map((f: any) => ({
+      fieldKey: f.field_key,
+      label: f.label,
+      xPosition: Number(f.x_position),
+      yPosition: Number(f.y_position),
+      fontSize: f.font_size,
+      fontColor: f.font_color,
+      textAlign: f.text_align as "left" | "center" | "right",
+      maxWidth: f.max_width ?? undefined,
+    }));
+
+    // Add extra CSV columns not in template as fallback fields
     const extraFields = csvHeaders
-      .filter((h) => h !== nameColumn && h !== emailColumn)
-      .map((h) => ({
+      .filter((h) => h !== nameColumn && h !== emailColumn && !savedFieldKeys.has(h))
+      .map((h, i) => ({
         fieldKey: h,
-        label: h.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        xPosition: 0,
-        yPosition: 0,
+        label: h.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        xPosition: 50,
+        yPosition: 60 + i * 5,
         fontSize: 12,
         fontColor: "#333333",
         textAlign: "center" as const,
@@ -200,11 +223,17 @@ const GenerateCertificates = () => {
       }));
 
     const config = {
-      templateName: "Default Template",
+      templateName: tmplData?.name || "Default Template",
       organizationName: orgName,
-      width: 842,
-      height: 595,
-      fields: extraFields,
+      width: tmplData?.width_px || 842,
+      height: tmplData?.height_px || 595,
+      fields: [...mappedFields, ...extraFields],
+      assets: {
+        backgroundUrl: tmplData?.background_url,
+        logoUrl: tmplData?.logo_url,
+        signatureUrl: tmplData?.signature_url,
+        sealUrl: tmplData?.seal_url,
+      },
     };
 
     const results = await generateBatch(batchRows, config, orgId, templateId, batch.id);
