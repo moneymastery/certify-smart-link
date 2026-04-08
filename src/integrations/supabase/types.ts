@@ -308,10 +308,16 @@ export type Database = {
           height_px: number
           id: string
           logo_url: string | null
+          logo_x: number
+          logo_y: number
           name: string
           organization_id: string
           seal_url: string | null
+          seal_x: number
+          seal_y: number
           signature_url: string | null
+          signature_x: number
+          signature_y: number
           updated_at: string
           width_px: number
         }
@@ -322,10 +328,16 @@ export type Database = {
           height_px?: number
           id?: string
           logo_url?: string | null
+          logo_x?: number
+          logo_y?: number
           name: string
           organization_id: string
           seal_url?: string | null
+          seal_x?: number
+          seal_y?: number
           signature_url?: string | null
+          signature_x?: number
+          signature_y?: number
           updated_at?: string
           width_px?: number
         }
@@ -336,10 +348,16 @@ export type Database = {
           height_px?: number
           id?: string
           logo_url?: string | null
+          logo_x?: number
+          logo_y?: number
           name?: string
           organization_id?: string
           seal_url?: string | null
+          seal_x?: number
+          seal_y?: number
           signature_url?: string | null
+          signature_x?: number
+          signature_y?: number
           updated_at?: string
           width_px?: number
         }
