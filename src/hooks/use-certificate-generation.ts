@@ -74,6 +74,7 @@ export const useCertificateGeneration = () => {
               recipient_email: row.recipientEmail || null,
               recipient_data: row.recipientData,
               status: "active",
+              issued_at: config.issueDate || new Date().toISOString(),
             })
             .select("id, verification_token")
             .single();

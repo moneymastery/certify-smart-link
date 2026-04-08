@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   ShieldCheck,
   ArrowLeft,
@@ -8,12 +9,16 @@ import {
   Download,
   CheckCircle,
   AlertCircle,
+  CalendarIcon,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import CSVUpload from "@/components/dashboard/CSVUpload";
 import { useCertificateGeneration } from "@/hooks/use-certificate-generation";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +50,7 @@ const GenerateCertificates = () => {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [verificationFields, setVerificationFields] = useState<string[]>([]);
+  const [issueDate, setIssueDate] = useState<Date>(new Date());
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
   const [generatedCerts, setGeneratedCerts] = useState<GeneratedCertificate[]>([]);
@@ -237,6 +243,7 @@ const GenerateCertificates = () => {
       organizationName: orgName,
       width: tmplData?.width_px || 842,
       height: tmplData?.height_px || 595,
+      issueDate: issueDate.toISOString(),
       fields: [...mappedFields, ...extraFields],
       assets: {
         backgroundUrl: tmplData?.background_url,
@@ -409,6 +416,34 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                   onChange={(e) => setOrgName(e.target.value)}
                   placeholder="e.g. Acme Training Institute"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Issue Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !issueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {issueDate ? format(issueDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={issueDate}
+                      onSelect={(d) => d && setIssueDate(d)}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">This date appears on the certificate and verification page.</p>
               </div>
 
               {templates.length > 0 && (
