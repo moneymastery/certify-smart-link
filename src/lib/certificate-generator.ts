@@ -14,6 +14,12 @@ export interface TemplateAssets {
   logoUrl?: string | null;
   signatureUrl?: string | null;
   sealUrl?: string | null;
+  logoX?: number;
+  logoY?: number;
+  signatureX?: number;
+  signatureY?: number;
+  sealX?: number;
+  sealY?: number;
 }
 
 export interface GenerationConfig {
@@ -87,7 +93,7 @@ export const generateCertificatePDF = async (
 
   const assets = config.assets;
 
-  // Background: image or white
+  // Background
   if (assets?.backgroundUrl) {
     const bgBytes = await fetchImageBytes(assets.backgroundUrl);
     if (bgBytes) {
@@ -95,22 +101,17 @@ export const generateCertificatePDF = async (
         const bgImage = await embedImage(pdfDoc, bgBytes, assets.backgroundUrl);
         page.drawImage(bgImage, { x: 0, y: 0, width: config.width, height: config.height });
       } catch {
-        // Fallback white
         page.drawRectangle({ x: 0, y: 0, width: config.width, height: config.height, color: rgb(1, 1, 1) });
       }
     } else {
       page.drawRectangle({ x: 0, y: 0, width: config.width, height: config.height, color: rgb(1, 1, 1) });
     }
   } else {
-    // Default layout when no background image
     page.drawRectangle({ x: 0, y: 0, width: config.width, height: config.height, color: rgb(1, 1, 1) });
-
-    // Decorative border
     const borderColor = rgb(0.1, 0.15, 0.25);
     page.drawRectangle({ x: 20, y: 20, width: config.width - 40, height: config.height - 40, borderColor, borderWidth: 3 });
     page.drawRectangle({ x: 30, y: 30, width: config.width - 60, height: config.height - 60, borderColor: rgb(0.6, 0.75, 0.65), borderWidth: 1 });
 
-    // Title
     const titleText = "CERTIFICATE";
     const titleSize = 36;
     const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
@@ -126,7 +127,7 @@ export const generateCertificatePDF = async (
     page.drawText(certifyText, { x: (config.width - certifyWidth) / 2, y: config.height - 200, size: 12, font, color: rgb(0.4, 0.4, 0.4) });
   }
 
-  // Logo
+  // Logo — use saved position or defaults
   if (assets?.logoUrl) {
     const logoBytes = await fetchImageBytes(assets.logoUrl);
     if (logoBytes) {
@@ -134,20 +135,20 @@ export const generateCertificatePDF = async (
         const logoImage = await embedImage(pdfDoc, logoBytes, assets.logoUrl);
         const logoH = 50;
         const logoW = (logoImage.width / logoImage.height) * logoH;
-        page.drawImage(logoImage, { x: (config.width - logoW) / 2, y: config.height - logoH - 20, width: logoW, height: logoH });
+        const lx = (assets.logoX ?? 50) / 100 * config.width - logoW / 2;
+        const ly = config.height - (assets.logoY ?? 5) / 100 * config.height - logoH / 2;
+        page.drawImage(logoImage, { x: lx, y: ly, width: logoW, height: logoH });
       } catch { /* skip */ }
     }
   }
 
-  // Recipient name — draw using fields if present, otherwise default position
+  // Recipient name
   const nameField = config.fields.find(f => f.fieldKey === "recipient_name");
   if (nameField) {
-    // Position from template (percentage-based)
     const nameSize = nameField.fontSize || 28;
     const nameWidth = fontBold.widthOfTextAtSize(data.recipientName, nameSize);
     const xPct = nameField.xPosition / 100;
     const yPct = nameField.yPosition / 100;
-    // Convert percentage to PDF coords (y is inverted: 0% = top)
     let xPos: number;
     if (nameField.textAlign === "center") {
       xPos = xPct * config.width - nameWidth / 2;
@@ -165,7 +166,6 @@ export const generateCertificatePDF = async (
       color: hexToRgb(nameField.fontColor || "#1a1a2e"),
     });
   } else if (!assets?.backgroundUrl) {
-    // Default position when no template
     const nameSize = 28;
     const nameWidth = fontBold.widthOfTextAtSize(data.recipientName, nameSize);
     page.drawText(data.recipientName, { x: (config.width - nameWidth) / 2, y: config.height - 245, size: nameSize, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
@@ -173,19 +173,16 @@ export const generateCertificatePDF = async (
     page.drawLine({ start: { x: (config.width - lineWidth) / 2, y: config.height - 260 }, end: { x: (config.width + lineWidth) / 2, y: config.height - 260 }, thickness: 1, color: rgb(0.6, 0.75, 0.65) });
   }
 
-  // Dynamic fields (skip recipient_name since handled above)
+  // Dynamic fields
   for (const field of config.fields) {
     if (field.fieldKey === "recipient_name") continue;
     const value = data.recipientData[field.fieldKey] || "";
     if (!value) continue;
 
     const fieldSize = field.fontSize || 12;
-    const displayText = value;
-    const textWidth = font.widthOfTextAtSize(displayText, fieldSize);
-
+    const textWidth = font.widthOfTextAtSize(value, fieldSize);
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
-
     let xPos: number;
     if (field.textAlign === "center") {
       xPos = xPct * config.width - textWidth / 2;
@@ -195,8 +192,7 @@ export const generateCertificatePDF = async (
       xPos = xPct * config.width;
     }
     const yPos = config.height - yPct * config.height;
-
-    page.drawText(displayText, {
+    page.drawText(value, {
       x: Math.max(20, xPos),
       y: yPos,
       size: fieldSize,
@@ -205,7 +201,7 @@ export const generateCertificatePDF = async (
     });
   }
 
-  // Signature
+  // Signature — use saved position
   if (assets?.signatureUrl) {
     const sigBytes = await fetchImageBytes(assets.signatureUrl);
     if (sigBytes) {
@@ -213,12 +209,14 @@ export const generateCertificatePDF = async (
         const sigImage = await embedImage(pdfDoc, sigBytes, assets.signatureUrl);
         const sigH = 40;
         const sigW = (sigImage.width / sigImage.height) * sigH;
-        page.drawImage(sigImage, { x: 45, y: 70, width: sigW, height: sigH });
+        const sx = (assets.signatureX ?? 25) / 100 * config.width - sigW / 2;
+        const sy = config.height - (assets.signatureY ?? 85) / 100 * config.height - sigH / 2;
+        page.drawImage(sigImage, { x: sx, y: sy, width: sigW, height: sigH });
       } catch { /* skip */ }
     }
   }
 
-  // Seal
+  // Seal — use saved position
   if (assets?.sealUrl) {
     const sealBytes = await fetchImageBytes(assets.sealUrl);
     if (sealBytes) {
@@ -226,7 +224,9 @@ export const generateCertificatePDF = async (
         const sealImage = await embedImage(pdfDoc, sealBytes, assets.sealUrl);
         const sealH = 60;
         const sealW = (sealImage.width / sealImage.height) * sealH;
-        page.drawImage(sealImage, { x: config.width - sealW - 45, y: 50, width: sealW, height: sealH });
+        const sx = (assets.sealX ?? 80) / 100 * config.width - sealW / 2;
+        const sy = config.height - (assets.sealY ?? 82) / 100 * config.height - sealH / 2;
+        page.drawImage(sealImage, { x: sx, y: sy, width: sealW, height: sealH });
       } catch { /* skip */ }
     }
   }

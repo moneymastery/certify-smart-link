@@ -42,6 +42,7 @@ const GenerateCertificates = () => {
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
@@ -90,7 +91,6 @@ const GenerateCertificates = () => {
           setTemplates(templateList);
           setTemplateId(templateList[0].id);
         } else {
-          // Auto-create a default template
           const { data: newTemplate, error: templateInsertError } = await supabase
             .from("templates")
             .insert({
@@ -161,7 +161,6 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
-    // Fetch selected template data + fields
     const [templateResult, fieldsResult] = await Promise.all([
       supabase.from("templates").select("*").eq("id", templateId).single(),
       supabase.from("template_fields").select("*").eq("template_id", templateId).order("sort_order"),
@@ -195,7 +194,6 @@ const GenerateCertificates = () => {
       recipientData: row,
     }));
 
-    // Build fields config: use saved template fields, then fill in any CSV columns not already mapped
     const savedFieldKeys = new Set(tmplFields.map((f: any) => f.field_key));
     const mappedFields = tmplFields.map((f: any) => ({
       fieldKey: f.field_key,
@@ -208,7 +206,6 @@ const GenerateCertificates = () => {
       maxWidth: f.max_width ?? undefined,
     }));
 
-    // Add extra CSV columns not in template as fallback fields
     const extraFields = csvHeaders
       .filter((h) => h !== nameColumn && h !== emailColumn && !savedFieldKeys.has(h))
       .map((h, i) => ({
@@ -233,6 +230,12 @@ const GenerateCertificates = () => {
         logoUrl: tmplData?.logo_url,
         signatureUrl: tmplData?.signature_url,
         sealUrl: tmplData?.seal_url,
+        logoX: tmplData?.logo_x != null ? Number(tmplData.logo_x) : undefined,
+        logoY: tmplData?.logo_y != null ? Number(tmplData.logo_y) : undefined,
+        signatureX: tmplData?.signature_x != null ? Number(tmplData.signature_x) : undefined,
+        signatureY: tmplData?.signature_y != null ? Number(tmplData.signature_y) : undefined,
+        sealX: tmplData?.seal_x != null ? Number(tmplData.seal_x) : undefined,
+        sealY: tmplData?.seal_y != null ? Number(tmplData.seal_y) : undefined,
       },
     };
 
@@ -265,10 +268,30 @@ const GenerateCertificates = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadZip = async () => {
+    setDownloading(true);
+    try {
+      await downloadBatchAsZip(generatedCerts, batchName || "batch");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const progressPercent = total > 0 ? (progress / total) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* ZIP download overlay */}
+      {downloading && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <Loader2 className="h-12 w-12 text-accent mx-auto animate-spin" />
+            <h3 className="font-heading text-xl font-semibold text-foreground">Preparing Download</h3>
+            <p className="text-sm text-muted-foreground">Bundling {generatedCerts.length} certificates into a ZIP file...</p>
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-border bg-card">
         <div className="container mx-auto flex items-center justify-between h-16 px-6">
           <div className="flex items-center gap-4">
@@ -375,7 +398,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 />
               </div>
 
-              {templates.length > 1 && (
+              {templates.length > 0 && (
                 <div className="space-y-2">
                   <Label>Certificate Template</Label>
                   <select
@@ -498,10 +521,11 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               <Button
                 variant="hero"
                 size="lg"
-                onClick={() => downloadBatchAsZip(generatedCerts, batchName || "batch")}
+                onClick={handleDownloadZip}
+                disabled={downloading}
               >
-                <Download className="h-4 w-4" />
-                Download All as ZIP
+                {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {downloading ? "Preparing ZIP..." : "Download All as ZIP"}
               </Button>
               <Button variant="outline" size="lg" asChild>
                 <Link to="/dashboard">Back to Dashboard</Link>

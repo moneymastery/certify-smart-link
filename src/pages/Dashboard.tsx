@@ -14,10 +14,26 @@ import {
   Eye,
   LogOut,
   Palette,
+  Trash2,
+  Search,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/hooks/use-toast";
+import JSZip from "jszip";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Overview" },
@@ -31,59 +47,146 @@ const Dashboard = () => {
   const [stats, setStats] = useState({ templates: 0, certificates: 0, verifications: 0, batches: 0 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [orgId, setOrgId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!user) return;
+  // Search
+  const [certSearch, setCertSearch] = useState("");
+  const [batchSearch, setBatchSearch] = useState("");
 
-      // Get org
-      const { data: orgs } = await supabase.from("organizations").select("id").limit(1);
-      const orgId = orgs?.[0]?.id;
-      if (!orgId) return;
+  // Delete batch dialog
+  const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
+  const [deleteBatchName, setDeleteBatchName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
-      // Stats
-      const [tempRes, certRes, batchRes] = await Promise.all([
-        supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-        supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-        supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-      ]);
+  // Re-download
+  const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
 
-      // Count verifications for this org's certificates
-      const { data: orgCerts } = await supabase.from("certificates").select("id").eq("organization_id", orgId);
-      let verifCount = 0;
-      if (orgCerts && orgCerts.length > 0) {
-        const certIds = orgCerts.map((c) => c.id);
-        const { count } = await supabase.from("certificate_verifications").select("id", { count: "exact", head: true }).in("certificate_id", certIds);
-        verifCount = count || 0;
-      }
+  const loadData = async () => {
+    if (!user) return;
 
-      setStats({
-        templates: tempRes.count || 0,
-        certificates: certRes.count || 0,
-        batches: batchRes.count || 0,
-        verifications: verifCount,
-      });
+    const { data: orgs } = await supabase.from("organizations").select("id").limit(1);
+    const oid = orgs?.[0]?.id;
+    if (!oid) return;
+    setOrgId(oid);
 
-      // Recent certificates
+    const [tempRes, certRes, batchRes] = await Promise.all([
+      supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+      supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+      supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+    ]);
+
+    const { data: orgCerts } = await supabase.from("certificates").select("id").eq("organization_id", oid);
+    let verifCount = 0;
+    if (orgCerts && orgCerts.length > 0) {
+      const certIds = orgCerts.map((c) => c.id);
+      const { count } = await supabase.from("certificate_verifications").select("id", { count: "exact", head: true }).in("certificate_id", certIds);
+      verifCount = count || 0;
+    }
+
+    setStats({
+      templates: tempRes.count || 0,
+      certificates: certRes.count || 0,
+      batches: batchRes.count || 0,
+      verifications: verifCount,
+    });
+
+    const { data: certs } = await supabase
+      .from("certificates")
+      .select("id, serial_number, recipient_name, status, issued_at, pdf_url, verification_token")
+      .eq("organization_id", oid)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (certs) setCertificates(certs);
+
+    const { data: batchData } = await supabase
+      .from("certificate_batches")
+      .select("id, name, status, total_count, generated_count, created_at")
+      .eq("organization_id", oid)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (batchData) setBatches(batchData);
+  };
+
+  useEffect(() => { loadData(); }, [user]);
+
+  // Filtered lists
+  const filteredCerts = certSearch
+    ? certificates.filter((c) =>
+        c.recipient_name.toLowerCase().includes(certSearch.toLowerCase()) ||
+        c.serial_number.toLowerCase().includes(certSearch.toLowerCase())
+      )
+    : certificates;
+
+  const filteredBatches = batchSearch
+    ? batches.filter((b) => b.name.toLowerCase().includes(batchSearch.toLowerCase()))
+    : batches;
+
+  // Delete batch
+  const handleDeleteBatch = async () => {
+    if (!deleteBatchId) return;
+    setDeleting(true);
+    try {
+      // Delete certificates in batch first
+      const { error: certErr } = await supabase
+        .from("certificates")
+        .delete()
+        .eq("batch_id", deleteBatchId);
+      if (certErr) throw certErr;
+
+      const { error: batchErr } = await supabase
+        .from("certificate_batches")
+        .delete()
+        .eq("id", deleteBatchId);
+      if (batchErr) throw batchErr;
+
+      toast({ title: "Batch deleted", description: `"${deleteBatchName}" and its certificates have been removed.` });
+      await loadData();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setDeleteBatchId(null);
+    }
+  };
+
+  // Re-download batch as ZIP
+  const handleRedownloadBatch = async (batchId: string, batchName: string) => {
+    setDownloadingBatchId(batchId);
+    try {
       const { data: certs } = await supabase
         .from("certificates")
-        .select("id, serial_number, recipient_name, status, issued_at, pdf_url, verification_token")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (certs) setCertificates(certs);
+        .select("recipient_name, serial_number, pdf_url")
+        .eq("batch_id", batchId);
 
-      // Batches
-      const { data: batchData } = await supabase
-        .from("certificate_batches")
-        .select("id, name, status, total_count, generated_count, created_at")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false })
-        .limit(10);
-      if (batchData) setBatches(batchData);
-    };
-    load();
-  }, [user]);
+      if (!certs || certs.length === 0) {
+        toast({ title: "No certificates", description: "This batch has no certificates to download.", variant: "destructive" });
+        return;
+      }
+
+      const zip = new JSZip();
+      for (const cert of certs) {
+        if (!cert.pdf_url) continue;
+        try {
+          const res = await fetch(cert.pdf_url);
+          const blob = await res.blob();
+          const filename = `${cert.recipient_name.replace(/\s+/g, "_")}_${cert.serial_number}.pdf`;
+          zip.file(filename, blob);
+        } catch { /* skip failed downloads */ }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${batchName.replace(/\s+/g, "_")}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Download failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingBatchId(null);
+    }
+  };
 
   const statCards = [
     { label: "Templates", value: stats.templates, icon: Upload },
@@ -94,6 +197,29 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteBatchId} onOpenChange={(open) => { if (!open) setDeleteBatchId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete batch "{deleteBatchName}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete this batch and all its certificates. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBatch}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card">
         <div className="h-16 flex items-center gap-2 px-6 border-b border-border">
           <ShieldCheck className="h-5 w-5 text-accent" />
@@ -183,38 +309,50 @@ const Dashboard = () => {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border overflow-hidden">
-                  <div className="bg-muted px-4 py-3 flex items-center justify-between">
+                  <div className="bg-muted px-4 py-3 flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-foreground">Recent Certificates</span>
-                    <span className="text-xs text-muted-foreground">{certificates.length} shown</span>
+                    <div className="relative w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        value={certSearch}
+                        onChange={(e) => setCertSearch(e.target.value)}
+                        placeholder="Search by name or ID..."
+                        className="h-8 pl-8 text-xs"
+                      />
+                    </div>
                   </div>
                   <div className="divide-y divide-border">
-                    {certificates.map((cert) => (
-                      <div key={cert.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{cert.recipient_name}</p>
-                          <p className="text-xs text-muted-foreground">{cert.serial_number}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-medium capitalize ${
-                            cert.status === "active" ? "text-success" : "text-destructive"
-                          }`}>
-                            {cert.status}
-                          </span>
-                          {cert.pdf_url && (
-                            <a href={cert.pdf_url} target="_blank" rel="noopener noreferrer">
+                    {filteredCerts.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">No matching certificates found.</div>
+                    ) : (
+                      filteredCerts.map((cert) => (
+                        <div key={cert.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{cert.recipient_name}</p>
+                            <p className="text-xs text-muted-foreground">{cert.serial_number}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-medium capitalize ${
+                              cert.status === "active" ? "text-success" : "text-destructive"
+                            }`}>
+                              {cert.status}
+                            </span>
+                            {cert.pdf_url && (
+                              <a href={cert.pdf_url} target="_blank" rel="noopener noreferrer">
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                              </a>
+                            )}
+                            <Link to={`/verify/${cert.verification_token}`}>
                               <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <Download className="h-3.5 w-3.5" />
+                                <Eye className="h-3.5 w-3.5" />
                               </Button>
-                            </a>
-                          )}
-                          <Link to={`/verify/${cert.verification_token}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
-                          </Link>
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}
@@ -234,28 +372,68 @@ const Dashboard = () => {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border overflow-hidden">
-                  <div className="bg-muted px-4 py-3">
+                  <div className="bg-muted px-4 py-3 flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-foreground">Certificate Batches</span>
+                    <div className="relative w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        value={batchSearch}
+                        onChange={(e) => setBatchSearch(e.target.value)}
+                        placeholder="Search batches..."
+                        className="h-8 pl-8 text-xs"
+                      />
+                    </div>
                   </div>
                   <div className="divide-y divide-border">
-                    {batches.map((batch) => (
-                      <div key={batch.id} className="px-4 py-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{batch.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {batch.generated_count}/{batch.total_count} generated · {new Date(batch.created_at).toLocaleDateString()}
-                          </p>
+                    {filteredBatches.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">No matching batches found.</div>
+                    ) : (
+                      filteredBatches.map((batch) => (
+                        <div key={batch.id} className="px-4 py-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{batch.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {batch.generated_count}/{batch.total_count} generated · {new Date(batch.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-medium capitalize rounded-full px-2 py-0.5 ${
+                              batch.status === "completed" ? "bg-accent/10 text-accent" :
+                              batch.status === "processing" ? "bg-warning/10 text-warning" :
+                              batch.status === "failed" ? "bg-destructive/10 text-destructive" :
+                              "bg-muted text-muted-foreground"
+                            }`}>
+                              {batch.status}
+                            </span>
+                            {/* Re-download */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={downloadingBatchId === batch.id}
+                              onClick={() => handleRedownloadBatch(batch.id, batch.name)}
+                              title="Download certificates as ZIP"
+                            >
+                              {downloadingBatchId === batch.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Download className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                            {/* Delete */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => { setDeleteBatchId(batch.id); setDeleteBatchName(batch.name); }}
+                              title="Delete batch"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
-                        <span className={`text-xs font-medium capitalize rounded-full px-2 py-0.5 ${
-                          batch.status === "completed" ? "bg-accent/10 text-accent" :
-                          batch.status === "processing" ? "bg-warning/10 text-warning" :
-                          batch.status === "failed" ? "bg-destructive/10 text-destructive" :
-                          "bg-muted text-muted-foreground"
-                        }`}>
-                          {batch.status}
-                        </span>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               )}

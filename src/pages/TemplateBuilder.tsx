@@ -32,11 +32,18 @@ interface FieldItem {
   maxWidth: number | null;
 }
 
+interface AssetPosition {
+  x: number;
+  y: number;
+}
+
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
   { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", textAlign: "center", maxWidth: 600 },
   { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", textAlign: "center", maxWidth: 500 },
   { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", textAlign: "center", maxWidth: 300 },
 ];
+
+type DragTarget = string | "logo" | "signature" | "seal";
 
 const TemplateBuilder = () => {
   const { user } = useAuth();
@@ -48,15 +55,20 @@ const TemplateBuilder = () => {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [sealUrl, setSealUrl] = useState<string | null>(null);
+
+  const [logoPos, setLogoPos] = useState<AssetPosition>({ x: 50, y: 5 });
+  const [signaturePos, setSignaturePos] = useState<AssetPosition>({ x: 25, y: 85 });
+  const [sealPos, setSealPos] = useState<AssetPosition>({ x: 80, y: 82 });
+
   const [fields, setFields] = useState<FieldItem[]>(
     DEFAULT_FIELDS.map((f, i) => ({ ...f, id: `field-${i}` }))
   );
-  const [draggingField, setDraggingField] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<DragTarget | null>(null);
   const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
   const [saving, setSaving] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
 
-  // Canvas dimensions (display)
   const CANVAS_WIDTH = 842;
   const CANVAS_HEIGHT = 595;
 
@@ -108,35 +120,51 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseDown = (fieldId: string, e: React.MouseEvent) => {
+  const handleMouseDown = (target: DragTarget, e: React.MouseEvent) => {
     e.preventDefault();
-    setDraggingField(fieldId);
-    setSelectedField(fieldId);
+    e.stopPropagation();
+    setDragging(target);
+    if (target === "logo" || target === "signature" || target === "seal") {
+      setSelectedAsset(target);
+      setSelectedField(null);
+    } else {
+      setSelectedField(target);
+      setSelectedAsset(null);
+    }
   };
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
-      if (!draggingField || !canvasRef.current) return;
+      if (!dragging || !canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setFields((prev) =>
-        prev.map((f) =>
-          f.id === draggingField
-            ? { ...f, xPosition: Math.max(0, Math.min(100, x)), yPosition: Math.max(0, Math.min(100, y)) }
-            : f
-        )
-      );
+      const clampX = Math.max(0, Math.min(100, x));
+      const clampY = Math.max(0, Math.min(100, y));
+
+      if (dragging === "logo") {
+        setLogoPos({ x: clampX, y: clampY });
+      } else if (dragging === "signature") {
+        setSignaturePos({ x: clampX, y: clampY });
+      } else if (dragging === "seal") {
+        setSealPos({ x: clampX, y: clampY });
+      } else {
+        setFields((prev) =>
+          prev.map((f) =>
+            f.id === dragging ? { ...f, xPosition: clampX, yPosition: clampY } : f
+          )
+        );
+      }
     },
-    [draggingField]
+    [dragging]
   );
 
   const handleMouseUp = useCallback(() => {
-    setDraggingField(null);
+    setDragging(null);
   }, []);
 
   useEffect(() => {
-    if (draggingField) {
+    if (dragging) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
       return () => {
@@ -144,7 +172,7 @@ const TemplateBuilder = () => {
         window.removeEventListener("mouseup", handleMouseUp);
       };
     }
-  }, [draggingField, handleMouseMove, handleMouseUp]);
+  }, [dragging, handleMouseMove, handleMouseUp]);
 
   const addField = () => {
     const newField: FieldItem = {
@@ -160,6 +188,7 @@ const TemplateBuilder = () => {
     };
     setFields([...fields, newField]);
     setSelectedField(newField.id);
+    setSelectedAsset(null);
   };
 
   const removeField = (id: string) => {
@@ -169,6 +198,11 @@ const TemplateBuilder = () => {
 
   const updateField = (id: string, updates: Partial<FieldItem>) => {
     setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+  };
+
+  const handleCanvasClick = () => {
+    setSelectedField(null);
+    setSelectedAsset(null);
   };
 
   const handleSave = async () => {
@@ -188,13 +222,18 @@ const TemplateBuilder = () => {
           logo_url: logoUrl,
           signature_url: signatureUrl,
           seal_url: sealUrl,
+          logo_x: logoPos.x,
+          logo_y: logoPos.y,
+          signature_x: signaturePos.x,
+          signature_y: signaturePos.y,
+          seal_x: sealPos.x,
+          seal_y: sealPos.y,
         })
         .select("id")
         .single();
 
       if (tmplErr) throw tmplErr;
 
-      // Insert fields
       const fieldRows = fields.map((f, i) => ({
         template_id: template.id,
         field_key: f.fieldKey,
@@ -224,7 +263,6 @@ const TemplateBuilder = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border bg-card shrink-0">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-3">
@@ -282,7 +320,7 @@ const TemplateBuilder = () => {
               {fields.map((field) => (
                 <button
                   key={field.id}
-                  onClick={() => setSelectedField(field.id)}
+                  onClick={() => { setSelectedField(field.id); setSelectedAsset(null); }}
                   className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
                     selectedField === field.id
                       ? "bg-primary text-primary-foreground"
@@ -304,6 +342,7 @@ const TemplateBuilder = () => {
         <div className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
           <div
             ref={canvasRef}
+            onClick={handleCanvasClick}
             className="relative bg-background border border-border shadow-lg"
             style={{
               width: CANVAS_WIDTH,
@@ -313,19 +352,55 @@ const TemplateBuilder = () => {
               backgroundPosition: "center",
             }}
           >
-            {/* Logo overlay */}
+            {/* Logo overlay — draggable */}
             {logoUrl && (
-              <img src={logoUrl} alt="Logo" className="absolute top-4 left-1/2 -translate-x-1/2 h-12 object-contain" />
+              <img
+                src={logoUrl}
+                alt="Logo"
+                onMouseDown={(e) => handleMouseDown("logo", e)}
+                className={`absolute h-12 object-contain cursor-move select-none ${
+                  selectedAsset === "logo" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${logoPos.x}%`,
+                  top: `${logoPos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
             )}
 
-            {/* Signature overlay */}
+            {/* Signature overlay — draggable */}
             {signatureUrl && (
-              <img src={signatureUrl} alt="Signature" className="absolute bottom-16 left-[25%] h-10 object-contain" />
+              <img
+                src={signatureUrl}
+                alt="Signature"
+                onMouseDown={(e) => handleMouseDown("signature", e)}
+                className={`absolute h-10 object-contain cursor-move select-none ${
+                  selectedAsset === "signature" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${signaturePos.x}%`,
+                  top: `${signaturePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
             )}
 
-            {/* Seal overlay */}
+            {/* Seal overlay — draggable */}
             {sealUrl && (
-              <img src={sealUrl} alt="Seal" className="absolute bottom-12 right-[15%] h-16 object-contain" />
+              <img
+                src={sealUrl}
+                alt="Seal"
+                onMouseDown={(e) => handleMouseDown("seal", e)}
+                className={`absolute h-16 object-contain cursor-move select-none ${
+                  selectedAsset === "seal" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${sealPos.x}%`,
+                  top: `${sealPos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              />
             )}
 
             {/* Draggable fields */}
@@ -333,7 +408,6 @@ const TemplateBuilder = () => {
               <div
                 key={field.id}
                 onMouseDown={(e) => handleMouseDown(field.id, e)}
-                onClick={() => setSelectedField(field.id)}
                 className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow ${
                   selectedField === field.id
                     ? "ring-2 ring-accent ring-offset-1 shadow-md"
@@ -365,121 +439,172 @@ const TemplateBuilder = () => {
           </div>
         </div>
 
-        {/* Right sidebar - field properties */}
-        {selectedFieldData && (
+        {/* Right sidebar - field/asset properties */}
+        {(selectedFieldData || selectedAsset) && (
           <aside className="w-64 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field Properties</h3>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeField(selectedFieldData.id)}>
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Label</Label>
-                <Input
-                  value={selectedFieldData.label}
-                  onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })}
-                  className="h-8 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Field Key (CSV column)</Label>
-                <Input
-                  value={selectedFieldData.fieldKey}
-                  onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })}
-                  className="h-8 text-sm font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">X (%)</Label>
-                  <Input
-                    type="number"
-                    value={Math.round(selectedFieldData.xPosition)}
-                    onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })}
-                    className="h-8 text-sm"
-                    min={0}
-                    max={100}
-                  />
+            {selectedAsset && (
+              <>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Position
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">X (%)</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(
+                        selectedAsset === "logo" ? logoPos.x : selectedAsset === "signature" ? signaturePos.x : sealPos.x
+                      )}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, x: v }));
+                        else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, x: v }));
+                        else setSealPos((p) => ({ ...p, x: v }));
+                      }}
+                      className="h-8 text-sm"
+                      min={0}
+                      max={100}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Y (%)</Label>
+                    <Input
+                      type="number"
+                      value={Math.round(
+                        selectedAsset === "logo" ? logoPos.y : selectedAsset === "signature" ? signaturePos.y : sealPos.y
+                      )}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, y: v }));
+                        else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, y: v }));
+                        else setSealPos((p) => ({ ...p, y: v }));
+                      }}
+                      className="h-8 text-sm"
+                      min={0}
+                      max={100}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Y (%)</Label>
-                  <Input
-                    type="number"
-                    value={Math.round(selectedFieldData.yPosition)}
-                    onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })}
-                    className="h-8 text-sm"
-                    min={0}
-                    max={100}
-                  />
+                <p className="text-xs text-muted-foreground">Drag the asset on the canvas or type exact coordinates.</p>
+              </>
+            )}
+
+            {selectedFieldData && (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field Properties</h3>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeField(selectedFieldData.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs">Font Size</Label>
-                <Input
-                  type="number"
-                  value={selectedFieldData.fontSize}
-                  onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })}
-                  className="h-8 text-sm"
-                  min={8}
-                  max={72}
-                />
-              </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Label</Label>
+                    <Input
+                      value={selectedFieldData.label}
+                      onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })}
+                      className="h-8 text-sm"
+                    />
+                  </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs">Color</Label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={selectedFieldData.fontColor}
-                    onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                    className="h-8 w-8 rounded border border-border cursor-pointer"
-                  />
-                  <Input
-                    value={selectedFieldData.fontColor}
-                    onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                    className="h-8 text-sm font-mono flex-1"
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-xs">Field Key (CSV column)</Label>
+                    <Input
+                      value={selectedFieldData.fieldKey}
+                      onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })}
+                      className="h-8 text-sm font-mono"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">X (%)</Label>
+                      <Input
+                        type="number"
+                        value={Math.round(selectedFieldData.xPosition)}
+                        onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })}
+                        className="h-8 text-sm"
+                        min={0}
+                        max={100}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Y (%)</Label>
+                      <Input
+                        type="number"
+                        value={Math.round(selectedFieldData.yPosition)}
+                        onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })}
+                        className="h-8 text-sm"
+                        min={0}
+                        max={100}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Font Size</Label>
+                    <Input
+                      type="number"
+                      value={selectedFieldData.fontSize}
+                      onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })}
+                      className="h-8 text-sm"
+                      min={8}
+                      max={72}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Color</Label>
+                    <div className="flex gap-2">
+                      <input
+                        type="color"
+                        value={selectedFieldData.fontColor}
+                        onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
+                        className="h-8 w-8 rounded border border-border cursor-pointer"
+                      />
+                      <Input
+                        value={selectedFieldData.fontColor}
+                        onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
+                        className="h-8 text-sm font-mono flex-1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Align</Label>
+                    <div className="flex gap-1">
+                      {["left", "center", "right"].map((a) => (
+                        <Button
+                          key={a}
+                          variant={selectedFieldData.textAlign === a ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1 h-7 text-xs capitalize"
+                          onClick={() => updateField(selectedFieldData.id, { textAlign: a })}
+                        >
+                          {a}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Max Width (px)</Label>
+                    <Input
+                      type="number"
+                      value={selectedFieldData.maxWidth || ""}
+                      onChange={(e) =>
+                        updateField(selectedFieldData.id, {
+                          maxWidth: e.target.value ? Number(e.target.value) : null,
+                        })
+                      }
+                      className="h-8 text-sm"
+                      placeholder="Auto"
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Align</Label>
-                <div className="flex gap-1">
-                  {["left", "center", "right"].map((a) => (
-                    <Button
-                      key={a}
-                      variant={selectedFieldData.textAlign === a ? "default" : "outline"}
-                      size="sm"
-                      className="flex-1 h-7 text-xs capitalize"
-                      onClick={() => updateField(selectedFieldData.id, { textAlign: a })}
-                    >
-                      {a}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Max Width (px)</Label>
-                <Input
-                  type="number"
-                  value={selectedFieldData.maxWidth || ""}
-                  onChange={(e) =>
-                    updateField(selectedFieldData.id, {
-                      maxWidth: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                  className="h-8 text-sm"
-                  placeholder="Auto"
-                />
-              </div>
-            </div>
+              </>
+            )}
           </aside>
         )}
       </div>
