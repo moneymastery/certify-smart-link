@@ -46,7 +46,7 @@ const Dashboard = () => {
         supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
         supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
         supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-        supabase.from("certificate_verifications").select("id", { count: "exact", head: true }),
+        supabase.from("certificates").select("id, certificate_verifications(id)", { count: "exact", head: true }).eq("organization_id", orgId),
       ]);
 
       setStats({
@@ -107,9 +107,18 @@ const Dashboard = () => {
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-1">
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" asChild>
             <Link to="/">← Back to Home</Link>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground"
+            onClick={signOut}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
           </Button>
         </div>
       </aside>
