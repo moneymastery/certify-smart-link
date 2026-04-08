@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, Search, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ShieldCheck, Search, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface CertificateResult {
@@ -14,13 +14,6 @@ interface CertificateResult {
   issued_at: string;
   organization_id: string;
 }
-
-const statusColors: Record<string, string> = {
-  active: "text-success",
-  revoked: "text-destructive",
-  reissued: "text-warning",
-  expired: "text-muted-foreground",
-};
 
 const Verify = () => {
   const { id: tokenFromUrl } = useParams<{ id: string }>();
@@ -34,7 +27,6 @@ const Verify = () => {
     if (!token) return;
     setStatus("loading");
 
-    // Search by verification_token or serial_number
     const { data, error } = await supabase
       .from("certificates")
       .select("id, serial_number, recipient_name, recipient_data, status, issued_at, organization_id")
@@ -50,13 +42,11 @@ const Verify = () => {
 
     setCertificate(data as CertificateResult);
 
-    // Get org name
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("name")
-      .eq("id", data.organization_id)
-      .single();
-    if (org) setOrgName(org.name);
+    // Get org name via RPC (bypasses RLS for anon users)
+    const { data: name } = await supabase.rpc("get_org_name_for_certificate", {
+      _cert_id: data.id,
+    });
+    if (name) setOrgName(name);
 
     // Log verification
     await supabase.from("certificate_verifications").insert({
@@ -75,42 +65,47 @@ const Verify = () => {
   }, [tokenFromUrl]);
 
   const recipientData = certificate?.recipient_data as Record<string, string> | undefined;
+  const isRevoked = certificate?.status === "revoked";
+  const isActive = certificate?.status === "active";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
       <header className="border-b border-border bg-card">
-        <div className="container mx-auto flex items-center justify-between h-16 px-6">
+        <div className="container mx-auto flex items-center justify-between h-14 px-4">
           <Link to="/" className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-accent" />
-            <span className="font-heading text-xl font-semibold text-foreground">CertifyPro</span>
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <span className="font-heading text-lg font-semibold text-foreground">CertifyPro</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/">Back to Home</Link>
+            <Link to="/">Home</Link>
           </Button>
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center px-6">
-        <div className="w-full max-w-md text-center space-y-8">
-          <div>
-            <h1 className="font-heading text-3xl font-bold text-foreground">Verify Certificate</h1>
-            <p className="mt-2 text-muted-foreground">
-              Enter the certificate ID or scan the QR code to verify authenticity.
+      {/* Main */}
+      <main className="flex-1 flex items-start justify-center px-4 py-8 sm:py-16">
+        <div className="w-full max-w-sm space-y-6">
+          {/* Title */}
+          <div className="text-center">
+            <h1 className="font-heading text-2xl font-bold text-foreground">Verify Certificate</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Enter the certificate ID or scan the QR code.
             </p>
           </div>
 
+          {/* Search */}
           <div className="flex gap-2">
             <Input
-              placeholder="Enter Certificate ID or Token..."
+              placeholder="Certificate ID or Token..."
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
                 if (status !== "idle") setStatus("idle");
               }}
               onKeyDown={(e) => e.key === "Enter" && handleVerify()}
-              className="text-center"
             />
-            <Button variant="hero" onClick={() => handleVerify()} disabled={status === "loading"}>
+            <Button onClick={() => handleVerify()} disabled={status === "loading"} size="icon" className="shrink-0">
               {status === "loading" ? (
                 <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : (
@@ -119,13 +114,21 @@ const Verify = () => {
             </Button>
           </div>
 
-          {status === "found" && certificate && (
-            <div className="rounded-xl border border-border bg-card p-6 animate-fade-up">
-              <CheckCircle className="h-12 w-12 text-success mx-auto mb-4" />
-              <h3 className="font-heading text-lg font-semibold text-foreground">Certificate Verified</h3>
-              <div className="mt-4 space-y-0 text-sm text-left">
+          {/* ✅ Verified */}
+          {status === "found" && certificate && isActive && (
+            <div className="rounded-xl border border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30 p-6 animate-fade-up">
+              <div className="flex flex-col items-center mb-5">
+                <div className="h-14 w-14 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center mb-3">
+                  <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+                <h3 className="font-heading text-lg font-bold text-green-700 dark:text-green-400">
+                  Certificate Verified
+                </h3>
+              </div>
+
+              <div className="space-y-0 text-sm">
                 <Row label="Holder" value={certificate.recipient_name} />
-                {orgName && <Row label="Issuer" value={orgName} />}
+                {orgName && <Row label="Issued by" value={orgName} />}
                 <Row
                   label="Issue Date"
                   value={new Date(certificate.issued_at).toLocaleDateString("en-US", {
@@ -134,7 +137,7 @@ const Verify = () => {
                     day: "numeric",
                   })}
                 />
-                <Row label="Serial" value={certificate.serial_number} />
+                <Row label="ID" value={certificate.serial_number} />
                 {recipientData &&
                   Object.entries(recipientData)
                     .filter(([key]) => !["name", "email", "recipient_name", "recipient_email"].includes(key.toLowerCase()))
@@ -147,25 +150,81 @@ const Verify = () => {
                     ))}
                 <div className="flex justify-between py-2.5">
                   <span className="text-muted-foreground">Status</span>
-                  <span className={`inline-flex items-center gap-1 font-medium capitalize ${statusColors[certificate.status] || "text-foreground"}`}>
-                    {certificate.status === "active" && <CheckCircle className="h-3.5 w-3.5" />}
-                    {certificate.status === "revoked" && <XCircle className="h-3.5 w-3.5" />}
-                    {certificate.status}
+                  <span className="inline-flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Active
                   </span>
                 </div>
               </div>
             </div>
           )}
 
-          {status === "not-found" && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 animate-fade-up">
-              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h3 className="font-heading text-lg font-semibold text-foreground">Certificate Not Found</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                No certificate matches this ID. Please check and try again.
-              </p>
+          {/* ⚠️ Revoked */}
+          {status === "found" && certificate && isRevoked && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-6 animate-fade-up">
+              <div className="flex flex-col items-center mb-5">
+                <div className="h-14 w-14 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center mb-3">
+                  <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                </div>
+                <h3 className="font-heading text-lg font-bold text-amber-700 dark:text-amber-400">
+                  Certificate Revoked
+                </h3>
+              </div>
+
+              <div className="space-y-0 text-sm">
+                <Row label="Holder" value={certificate.recipient_name} />
+                {orgName && <Row label="Issued by" value={orgName} />}
+                <Row label="ID" value={certificate.serial_number} />
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+                    <XCircle className="h-3.5 w-3.5" />
+                    Revoked
+                  </span>
+                </div>
+              </div>
             </div>
           )}
+
+          {/* Found but other status (reissued, expired, etc.) */}
+          {status === "found" && certificate && !isActive && !isRevoked && (
+            <div className="rounded-xl border border-border bg-card p-6 animate-fade-up">
+              <div className="flex flex-col items-center mb-5">
+                <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                  <Clock className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 className="font-heading text-lg font-bold text-foreground capitalize">
+                  Certificate {certificate.status}
+                </h3>
+              </div>
+
+              <div className="space-y-0 text-sm">
+                <Row label="Holder" value={certificate.recipient_name} />
+                {orgName && <Row label="Issued by" value={orgName} />}
+                <Row label="ID" value={certificate.serial_number} />
+              </div>
+            </div>
+          )}
+
+          {/* ❌ Not found */}
+          {status === "not-found" && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 animate-fade-up">
+              <div className="flex flex-col items-center">
+                <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center mb-3">
+                  <XCircle className="h-8 w-8 text-destructive" />
+                </div>
+                <h3 className="font-heading text-lg font-bold text-foreground">Invalid Certificate</h3>
+                <p className="mt-2 text-sm text-muted-foreground text-center">
+                  No certificate matches this ID. Please check and try again.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <p className="text-center text-xs text-muted-foreground pt-4">
+            Powered by <span className="font-medium text-foreground">CertifyPro</span>
+          </p>
         </div>
       </main>
     </div>
@@ -173,7 +232,7 @@ const Verify = () => {
 };
 
 const Row = ({ label, value }: { label: string; value: string }) => (
-  <div className="flex justify-between py-2.5 border-b border-border">
+  <div className="flex justify-between py-2.5 border-b border-border last:border-0">
     <span className="text-muted-foreground">{label}</span>
     <span className="font-medium text-foreground text-right max-w-[60%] break-words">{value}</span>
   </div>
