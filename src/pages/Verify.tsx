@@ -39,19 +39,17 @@ const Verify = () => {
       return;
     }
 
-    const data_row = cert as CertificateResult;
-
-    setCertificate(data as CertificateResult);
+    setCertificate(cert as CertificateResult);
 
     // Get org name via RPC (bypasses RLS for anon users)
     const { data: name } = await supabase.rpc("get_org_name_for_certificate", {
-      _cert_id: data.id,
+      _cert_id: cert.id,
     });
     if (name) setOrgName(name);
 
     // Log verification
     await supabase.from("certificate_verifications").insert({
-      certificate_id: data.id,
+      certificate_id: cert.id,
       user_agent: navigator.userAgent,
     });
 
