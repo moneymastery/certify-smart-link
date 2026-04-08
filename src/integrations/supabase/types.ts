@@ -319,6 +319,7 @@ export type Database = {
           signature_x: number
           signature_y: number
           updated_at: string
+          verification_fields: string[]
           width_px: number
         }
         Insert: {
@@ -339,6 +340,7 @@ export type Database = {
           signature_x?: number
           signature_y?: number
           updated_at?: string
+          verification_fields?: string[]
           width_px?: number
         }
         Update: {
@@ -359,6 +361,7 @@ export type Database = {
           signature_x?: number
           signature_y?: number
           updated_at?: string
+          verification_fields?: string[]
           width_px?: number
         }
         Relationships: [
@@ -379,6 +382,14 @@ export type Database = {
       create_user_organization: {
         Args: { _name: string; _owner_id: string; _slug: string }
         Returns: string
+      }
+      get_org_branding_for_certificate: {
+        Args: { _cert_id: string }
+        Returns: {
+          org_logo_url: string
+          org_name: string
+          verification_fields: string[]
+        }[]
       }
       get_org_name_for_certificate: {
         Args: { _cert_id: string }
