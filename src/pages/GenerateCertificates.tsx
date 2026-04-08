@@ -451,7 +451,33 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </div>
             </div>
 
-            <div className="rounded-lg border border-border overflow-hidden">
+            {/* Verification fields picker */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Fields visible after QR scan</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose which details are shown when someone scans the certificate QR code.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {csvHeaders.map((h) => (
+                  <label key={h} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Checkbox
+                      checked={verificationFields.includes(h)}
+                      onCheckedChange={(checked) => {
+                        setVerificationFields((prev) =>
+                          checked ? [...prev, h] : prev.filter((f) => f !== h)
+                        );
+                      }}
+                    />
+                    <span className="text-sm text-foreground truncate">
+                      {h.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
               <div className="bg-muted px-4 py-2 flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-muted-foreground">Preview ({csvRows.length} recipients)</span>
                 <span className="text-xs text-muted-foreground">Showing all uploaded rows</span>
