@@ -64,14 +64,14 @@ const GenerateCertificates = () => {
         let org = orgs?.[0];
         if (!org) {
           const slug = `org-${user.id.substring(0, 8)}`;
-          const { data: newOrg, error: orgInsertError } = await supabase
-            .from("organizations")
-            .insert({ name: "My Organization", slug, owner_id: user.id })
-            .select("id, name")
-            .single();
+          const { data: newOrgId, error: orgInsertError } = await supabase.rpc('create_user_organization', {
+            _name: 'My Organization',
+            _slug: slug,
+            _owner_id: user.id,
+          });
 
-          if (orgInsertError || !newOrg) throw orgInsertError ?? new Error("Could not create organization");
-          org = newOrg;
+          if (orgInsertError || !newOrgId) throw orgInsertError ?? new Error("Could not create organization");
+          org = { id: newOrgId, name: 'My Organization' };
         }
 
         setOrgId(org.id);
