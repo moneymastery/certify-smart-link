@@ -39,6 +39,7 @@ const GenerateCertificates = () => {
   const [emailColumn, setEmailColumn] = useState("");
   const [orgId, setOrgId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
 
@@ -77,16 +78,19 @@ const GenerateCertificates = () => {
         setOrgId(org.id);
         setOrgName(org.name);
 
-        const { data: templates, error: templateLookupError } = await supabase
+        const { data: templateList, error: templateLookupError } = await supabase
           .from("templates")
-          .select("id")
+          .select("id, name")
           .eq("organization_id", org.id)
-          .limit(1);
+          .order("created_at", { ascending: false });
 
         if (templateLookupError) throw templateLookupError;
 
-        let tmpl = templates?.[0];
-        if (!tmpl) {
+        if (templateList && templateList.length > 0) {
+          setTemplates(templateList);
+          setTemplateId(templateList[0].id);
+        } else {
+          // Auto-create a default template
           const { data: newTemplate, error: templateInsertError } = await supabase
             .from("templates")
             .insert({
@@ -96,16 +100,15 @@ const GenerateCertificates = () => {
               width_px: 842,
               height_px: 595,
             })
-            .select("id")
+            .select("id, name")
             .single();
 
           if (templateInsertError || !newTemplate) {
             throw templateInsertError ?? new Error("Could not create template");
           }
-          tmpl = newTemplate;
+          setTemplates([newTemplate]);
+          setTemplateId(newTemplate.id);
         }
-
-        setTemplateId(tmpl.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not prepare certificate generation.";
         setSetupError(message);
