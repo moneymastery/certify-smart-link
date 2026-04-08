@@ -27,6 +27,7 @@ export interface GenerationConfig {
   organizationName: string;
   width: number;
   height: number;
+  issueDate?: string;
   fields: {
     fieldKey: string;
     label: string;
