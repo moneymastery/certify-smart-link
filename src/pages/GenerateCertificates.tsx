@@ -9,6 +9,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,7 +44,7 @@ const GenerateCertificates = () => {
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-
+  const [verificationFields, setVerificationFields] = useState<string[]>([]);
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
   const [generatedCerts, setGeneratedCerts] = useState<GeneratedCertificate[]>([]);
@@ -135,6 +136,12 @@ const GenerateCertificates = () => {
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
+    // Pre-select all non-email fields for verification display
+    const preSelected = headers.filter(
+      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
+    );
+    setVerificationFields(preSelected);
+
     setStep("configure");
   };
 
@@ -160,6 +167,12 @@ const GenerateCertificates = () => {
     }
 
     setStep("generating");
+
+    // Save selected verification fields to the template
+    await supabase
+      .from("templates")
+      .update({ verification_fields: verificationFields } as any)
+      .eq("id", templateId);
 
     const [templateResult, fieldsResult] = await Promise.all([
       supabase.from("templates").select("*").eq("id", templateId).single(),
@@ -441,6 +454,33 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                     ))}
                   </select>
                 </div>
+              </div>
+            </div>
+
+            {/* Verification fields picker */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Fields visible after QR scan</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose which details are shown when someone scans the certificate QR code.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {csvHeaders.map((h) => (
+                  <label key={h} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Checkbox
+                      checked={verificationFields.includes(h)}
+                      onCheckedChange={(checked) => {
+                        setVerificationFields((prev) =>
+                          checked ? [...prev, h] : prev.filter((f) => f !== h)
+                        );
+                      }}
+                    />
+                    <span className="text-sm text-foreground truncate">
+                      {h.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
