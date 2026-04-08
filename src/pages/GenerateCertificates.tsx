@@ -136,6 +136,12 @@ const GenerateCertificates = () => {
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
+    // Pre-select all non-email fields for verification display
+    const preSelected = headers.filter(
+      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
+    );
+    setVerificationFields(preSelected);
+
     setStep("configure");
   };
 
