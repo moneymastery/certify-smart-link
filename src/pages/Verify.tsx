@@ -34,13 +34,43 @@ const Verify = () => {
     if (!token) return;
     setStatus("loading");
 
-    const { data, error } = await supabase.rpc("verify_certificate_by_token", {
-      _token: token,
-    });
+    let cert: any = null;
+    let usedFallback = false;
 
-    const cert = Array.isArray(data) ? data[0] : data;
+    try {
+      const { data, error } = await supabase.rpc("verify_certificate_by_token", {
+        _token: token,
+      });
 
-    if (error || !cert) {
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!error && result) {
+        cert = result;
+      }
+    } catch {
+      // Primary API unreachable — will try fallback
+    }
+
+    // Static fallback: if primary failed, try GitHub-hosted manifest
+    if (!cert) {
+      try {
+        const fallbackUrl = `${window.location.origin}/certificates-manifest.json`;
+        const res = await fetch(fallbackUrl, { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          const manifest = await res.json();
+          const match = Array.isArray(manifest)
+            ? manifest.find((c: any) => c.verification_token === token)
+            : null;
+          if (match) {
+            cert = match;
+            usedFallback = true;
+          }
+        }
+      } catch {
+        // Fallback also unavailable
+      }
+    }
+
+    if (!cert) {
       setStatus("not-found");
       setCertificate(null);
       setBranding(null);
@@ -49,18 +79,30 @@ const Verify = () => {
 
     setCertificate(cert as CertificateResult);
 
-    // Get org branding + verification fields
-    const { data: brandingData } = await supabase.rpc("get_org_branding_for_certificate", {
-      _cert_id: cert.id,
-    });
-    const b = Array.isArray(brandingData) ? brandingData[0] : brandingData;
-    if (b) setBranding(b as OrgBranding);
+    // Get org branding (skip if using fallback — branding may be embedded)
+    if (!usedFallback) {
+      try {
+        const { data: brandingData } = await supabase.rpc("get_org_branding_for_certificate", {
+          _cert_id: cert.id,
+        });
+        const b = Array.isArray(brandingData) ? brandingData[0] : brandingData;
+        if (b) setBranding(b as OrgBranding);
+      } catch {
+        // Branding fetch failed, continue with defaults
+      }
 
-    // Log verification
-    await supabase.from("certificate_verifications").insert({
-      certificate_id: cert.id,
-      user_agent: navigator.userAgent,
-    });
+      // Log verification
+      try {
+        await supabase.from("certificate_verifications").insert({
+          certificate_id: cert.id,
+          user_agent: navigator.userAgent,
+        });
+      } catch {
+        // Non-critical
+      }
+    } else if (cert.branding) {
+      setBranding(cert.branding as OrgBranding);
+    }
 
     setStatus("found");
   };
