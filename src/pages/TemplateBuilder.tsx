@@ -67,12 +67,12 @@ const TemplateBuilder = () => {
       let org = orgs?.[0];
       if (!org) {
         const slug = `org-${user.id.substring(0, 8)}`;
-        const { data: newOrg } = await supabase
-          .from("organizations")
-          .insert({ name: "My Organization", slug, owner_id: user.id })
-          .select("id")
-          .single();
-        org = newOrg;
+        const { data: newOrgId } = await supabase.rpc('create_user_organization', {
+          _name: 'My Organization',
+          _slug: slug,
+          _owner_id: user.id,
+        });
+        org = newOrgId ? { id: newOrgId } : null;
       }
       if (org) setOrgId(org.id);
     };
