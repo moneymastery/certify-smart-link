@@ -392,6 +392,18 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      verify_certificate_by_token: {
+        Args: { _token: string }
+        Returns: {
+          id: string
+          issued_at: string
+          organization_id: string
+          recipient_data: Json
+          recipient_name: string
+          serial_number: string
+          status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

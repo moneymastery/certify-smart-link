@@ -27,30 +27,29 @@ const Verify = () => {
     if (!token) return;
     setStatus("loading");
 
-    const { data, error } = await supabase
-      .from("certificates")
-      .select("id, serial_number, recipient_name, recipient_data, status, issued_at, organization_id")
-      .or(`verification_token.eq.${token},serial_number.eq.${token}`)
-      .limit(1)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("verify_certificate_by_token", {
+      _token: token,
+    });
 
-    if (error || !data) {
+    const cert = Array.isArray(data) ? data[0] : data;
+
+    if (error || !cert) {
       setStatus("not-found");
       setCertificate(null);
       return;
     }
 
-    setCertificate(data as CertificateResult);
+    setCertificate(cert as CertificateResult);
 
     // Get org name via RPC (bypasses RLS for anon users)
     const { data: name } = await supabase.rpc("get_org_name_for_certificate", {
-      _cert_id: data.id,
+      _cert_id: cert.id,
     });
     if (name) setOrgName(name);
 
     // Log verification
     await supabase.from("certificate_verifications").insert({
-      certificate_id: data.id,
+      certificate_id: cert.id,
       user_agent: navigator.userAgent,
     });
 
