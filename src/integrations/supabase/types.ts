@@ -362,6 +362,10 @@ export type Database = {
         Args: { _name: string; _owner_id: string; _slug: string }
         Returns: string
       }
+      get_org_name_for_certificate: {
+        Args: { _cert_id: string }
+        Returns: string
+      }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
