@@ -375,6 +375,21 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 />
               </div>
 
+              {templates.length > 1 && (
+                <div className="space-y-2">
+                  <Label>Certificate Template</Label>
+                  <select
+                    value={templateId || ""}
+                    onChange={(e) => setTemplateId(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Name Column *</Label>
