@@ -243,6 +243,7 @@ const GenerateCertificates = () => {
       organizationName: orgName,
       width: tmplData?.width_px || 842,
       height: tmplData?.height_px || 595,
+      issueDate: issueDate.toISOString(),
       fields: [...mappedFields, ...extraFields],
       assets: {
         backgroundUrl: tmplData?.background_url,
