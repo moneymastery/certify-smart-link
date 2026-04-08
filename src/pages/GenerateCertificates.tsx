@@ -44,7 +44,7 @@ const GenerateCertificates = () => {
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-
+  const [verificationFields, setVerificationFields] = useState<string[]>([]);
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
   const [generatedCerts, setGeneratedCerts] = useState<GeneratedCertificate[]>([]);
