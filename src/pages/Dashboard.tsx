@@ -42,18 +42,26 @@ const Dashboard = () => {
       if (!orgId) return;
 
       // Stats
-      const [tempRes, certRes, batchRes, verifRes] = await Promise.all([
+      const [tempRes, certRes, batchRes] = await Promise.all([
         supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
         supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
         supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
-        supabase.from("certificates").select("id, certificate_verifications(id)", { count: "exact", head: true }).eq("organization_id", orgId),
       ]);
+
+      // Count verifications for this org's certificates
+      const { data: orgCerts } = await supabase.from("certificates").select("id").eq("organization_id", orgId);
+      let verifCount = 0;
+      if (orgCerts && orgCerts.length > 0) {
+        const certIds = orgCerts.map((c) => c.id);
+        const { count } = await supabase.from("certificate_verifications").select("id", { count: "exact", head: true }).in("certificate_id", certIds);
+        verifCount = count || 0;
+      }
 
       setStats({
         templates: tempRes.count || 0,
         certificates: certRes.count || 0,
         batches: batchRes.count || 0,
-        verifications: verifRes.count || 0,
+        verifications: verifCount,
       });
 
       // Recent certificates
