@@ -27,18 +27,19 @@ const Verify = () => {
     if (!token) return;
     setStatus("loading");
 
-    const { data, error } = await supabase
-      .from("certificates")
-      .select("id, serial_number, recipient_name, recipient_data, status, issued_at, organization_id")
-      .or(`verification_token.eq.${token},serial_number.eq.${token}`)
-      .limit(1)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc("verify_certificate_by_token", {
+      _token: token,
+    });
 
-    if (error || !data) {
+    const cert = Array.isArray(data) ? data[0] : data;
+
+    if (error || !cert) {
       setStatus("not-found");
       setCertificate(null);
       return;
     }
+
+    const data_row = cert as CertificateResult;
 
     setCertificate(data as CertificateResult);
 
