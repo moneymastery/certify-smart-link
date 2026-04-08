@@ -1,108 +1,64 @@
 
 
-## Full Audit: CertifyPro — Issues Found & Fix Plan
+## Plan: Template Builder + Dashboard Enhancements
 
-### Critical Issues
+### What's being built
 
-**1. Template Builder: Images broken (visible in screenshot)**
-The `certificate-templates` bucket is **private** (`public: false`), but the code calls `getPublicUrl()` which only works on public buckets. Result: all uploaded assets (background, logo, signature, seal) show broken image icons. This also means saved templates with these URLs will produce broken certificates.
+1. **Draggable logo, signature, and seal on template canvas** — Currently these are fixed-position. Make them draggable just like text fields, with position saved to the template and used during PDF generation.
 
-**Fix:** Either make the bucket public, or use `createSignedUrl()` for preview and store signed URLs. Simplest: make the bucket public (template assets are not sensitive).
+2. **Loading overlay for bulk ZIP download** — Show a progress/spinner overlay when downloading certificates as ZIP so the user knows it's working.
 
-**2. Template Builder: Saved template not used during generation**
-The Generate Certificates page auto-creates a "Default Template" if none exists, but it never reads the template's `background_url`, `logo_url`, `signature_url`, `seal_url`, or its `template_fields`. The PDF generator uses a hardcoded layout (white background, border, static text positions). Templates saved in the builder are effectively unused.
+3. **Delete certificate batches** — Add delete button on each batch row with a confirmation dialog. Uses existing RLS (need to add DELETE policy for admins).
 
-**Fix:** When generating certificates, fetch the selected template and its fields/assets, then use them in the PDF generator. The `certificate-generator.ts` needs to support embedding background images, logos, signatures, and seals from template data.
+4. **Re-download old batch certificates** — Add a download button on each batch in the Dashboard Batches tab that fetches all certificates for that batch and downloads them as a ZIP.
 
-**3. No sign-out button on Dashboard sidebar**
-The `signOut` function is imported from `useAuth` but never wired to any UI element. Users cannot log out.
-
-**Fix:** Add a sign-out button in the sidebar footer.
-
-**4. Duplicate RLS policies on `certificate_verifications`**
-Two INSERT policies both use `WITH CHECK (true)`: "Authenticated can log a verification" and "Anyone can log a verification". The linter warns about overly permissive policies. Also, anonymous QR scanners may fail to insert verification logs since there's no anon INSERT policy — only authenticated.
-
-**Fix:** Keep one INSERT policy for anon role with `WITH CHECK (true)`, drop the duplicate.
-
-**5. No template selection in Generate flow**
-Users create templates in the builder but cannot select which template to use when generating. It always picks the first template or auto-creates a default one.
-
-**Fix:** Add a template selector dropdown in the "configure" step.
-
-### Moderate Issues
-
-**6. Hardcoded published URL in QR codes**
-`verifyBaseUrl` is hardcoded to `https://verify-ease-pro.lovable.app`. If the published URL changes or a custom domain is used, all QR codes break.
-
-**Fix:** Use an environment variable or database setting for the verification base URL.
-
-**7. Dashboard doesn't filter verifications by org**
-The verification count query has no `.eq("organization_id", orgId)` — it counts ALL verifications across all organizations.
-
-**Fix:** Join through certificates table to filter by org.
-
-**8. Dashboard: No sign-out button**
-`signOut` is destructured from `useAuth()` but never rendered in the UI.
-
-**9. PDF certificates ignore template design**
-The `generateCertificatePDF` function draws a hardcoded white background with borders, title, etc. It completely ignores the template's background image, logo, signature, and seal that users upload in the Template Builder.
-
-**Fix:** Update `generateCertificatePDF` to accept and embed template assets (fetch images, embed in PDF).
-
-**10. Certificate fields positioned at (0,0) during generation**
-In `GenerateCertificates.tsx`, extra fields are created with `xPosition: 0, yPosition: 0` — they don't use the positions saved in the template builder.
-
-### Minor Issues
-
-**11. `animate-fade-up` CSS class may not exist**
-Used in `Verify.tsx` but not defined in Tailwind config or CSS. No animation will play.
-
-**12. No mobile responsiveness on Template Builder**
-The three-column layout with fixed 842px canvas won't work on mobile/tablet. No responsive handling.
-
-**13. No error boundary**
-No React error boundary — any unhandled error will crash the entire app with a white screen.
-
-**14. No password reset flow**
-Login page has no "Forgot password?" link.
-
-**15. No loading state when Dashboard first loads**
-Data fetches silently — no skeleton or spinner while stats/certificates load.
+5. **Search certificates** — Add a search input in the Certificates section that filters by recipient name or serial number.
 
 ---
 
-## Recommended Fix Plan (Priority Order)
+### Technical Details
 
-### Step 1: Fix storage bucket visibility
-Make `certificate-templates` bucket public so uploaded images render correctly in the Template Builder preview.
+#### Step 1: Database migration
+- Add columns to `templates` table for asset positions: `logo_x`, `logo_y`, `signature_x`, `signature_y`, `seal_x`, `seal_y` (all numeric, default values matching current fixed positions as percentages).
+- Add DELETE policy on `certificate_batches` for org admins: `USING (is_org_admin(auth.uid(), organization_id))`.
+- Add DELETE policy on `certificates` for org admins (to cascade-delete batch certs).
 
-### Step 2: Wire template data into PDF generation
-- Fetch selected template + fields when generating certificates
-- Update `generateCertificatePDF` to embed background image, logo, signature, seal from template URLs
-- Use saved field positions instead of hardcoded ones
+#### Step 2: Template Builder — Draggable assets
+Update `TemplateBuilder.tsx`:
+- Track position state for logo, signature, seal (as `{x: number, y: number}` percentages).
+- Make each asset image on the canvas draggable using the same `mousedown/mousemove/mouseup` pattern already used for fields.
+- Save positions to the new template columns on save.
+- Allow resizing via a width/height control in the right sidebar when an asset is selected.
 
-### Step 3: Add template selector to Generate flow
-Add a dropdown in the configure step to pick from saved templates.
+#### Step 3: Certificate generator — Use asset positions
+Update `certificate-generator.ts`:
+- Accept asset position data in `TemplateAssets` interface.
+- Use saved positions instead of hardcoded coordinates for logo, signature, seal placement in the PDF.
 
-### Step 4: Add sign-out button to Dashboard
-Wire the existing `signOut` function to a button in the sidebar.
+#### Step 4: GenerateCertificates — Loading overlay for ZIP download
+Update `GenerateCertificates.tsx`:
+- Add a `downloading` state. When "Download All as ZIP" is clicked, show a full-screen overlay with spinner and "Preparing download..." text.
+- Clear overlay when download completes.
 
-### Step 5: Fix Dashboard verification count
-Filter verifications by organization via a join.
+#### Step 5: Dashboard — Batch delete with confirmation
+Update `Dashboard.tsx`:
+- Add a Trash icon button on each batch row.
+- On click, show a confirmation dialog (using AlertDialog) asking "Delete batch X? This will also delete all certificates in this batch."
+- On confirm: delete all certificates in the batch, then delete the batch itself, then refresh the list.
 
-### Step 6: Clean up duplicate RLS policy
-Drop one of the duplicate `certificate_verifications` INSERT policies.
+#### Step 6: Dashboard — Re-download batch certificates
+Update `Dashboard.tsx`:
+- Add a Download icon button on each completed batch row.
+- On click, fetch all certificates for that batch (by `batch_id`), collect their `pdf_url`s, create a ZIP using JSZip, and trigger download.
+- Show a small loading indicator on the button while preparing.
 
-### Step 7: Add missing UX polish
-- Add `animate-fade-up` keyframe to Tailwind config
-- Add loading skeleton to Dashboard
-- Add "Forgot password?" link to Login
-- Add basic error boundary wrapper
-
-### Step 8: Make QR base URL configurable
-Store in an env var or org settings instead of hardcoding.
+#### Step 7: Dashboard — Certificate search
+Update `Dashboard.tsx`:
+- Add a search input above the certificates list.
+- Filter displayed certificates client-side by `recipient_name` or `serial_number` matching the search query (case-insensitive).
+- For the Batches tab, add search by batch name.
 
 ---
 
-**Technical scope:** 1 migration (storage bucket + RLS cleanup), updates to 5 files (`certificate-generator.ts`, `GenerateCertificates.tsx`, `Dashboard.tsx`, `TemplateBuilder.tsx`, `Login.tsx`), plus minor config updates.
+**Files to change:** 1 migration, `TemplateBuilder.tsx`, `certificate-generator.ts`, `GenerateCertificates.tsx`, `Dashboard.tsx`.
 
