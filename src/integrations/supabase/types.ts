@@ -358,6 +358,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_user_organization: {
+        Args: { _name: string; _owner_id: string; _slug: string }
+        Returns: string
+      }
       is_org_admin: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
