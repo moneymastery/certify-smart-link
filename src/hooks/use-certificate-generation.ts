@@ -47,7 +47,7 @@ export const useCertificateGeneration = () => {
       setTotal(rows.length);
       setProgress(0);
 
-      const verifyBaseUrl = window.location.origin;
+      const verifyBaseUrl = "https://verify-ease-pro.lovable.app";
       const results: GenerationResult = { success: 0, failed: 0, certificates: [] };
 
       for (let i = 0; i < rows.length; i++) {
