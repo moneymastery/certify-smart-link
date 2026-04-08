@@ -168,6 +168,12 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
+    // Save selected verification fields to the template
+    await supabase
+      .from("templates")
+      .update({ verification_fields: verificationFields } as any)
+      .eq("id", templateId);
+
     const [templateResult, fieldsResult] = await Promise.all([
       supabase.from("templates").select("*").eq("id", templateId).single(),
       supabase.from("template_fields").select("*").eq("template_id", templateId).order("sort_order"),
