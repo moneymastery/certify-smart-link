@@ -417,6 +417,34 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Issue Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !issueDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {issueDate ? format(issueDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={issueDate}
+                      onSelect={(d) => d && setIssueDate(d)}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">This date appears on the certificate and verification page.</p>
+              </div>
+
               {templates.length > 0 && (
                 <div className="space-y-2">
                   <Label>Certificate Template</Label>
