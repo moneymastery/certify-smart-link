@@ -1,64 +1,49 @@
 
 
-## Problem
+## Summary
 
-The app is completely blocked because **INSERT into `organizations` returns 403** (RLS violation). This happens on every page load (Dashboard, GenerateCertificates, TemplateBuilder) since they all try to auto-create an organization when none exists.
+The QR verification flow is already built — scanning a QR code on a certificate opens `/verify/{token}` which queries the database and shows results. However, there are two bugs and the UI needs polish to match your vision.
 
-The RLS INSERT policy `WITH CHECK (auth.uid() = owner_id)` should theoretically work, but it fails in practice. This is likely a platform-level JWT validation issue with the ES256 tokens where `auth.uid()` doesn't resolve correctly during the INSERT check.
+## Problems to Fix
 
-## Solution
+1. **Organization name doesn't load for anonymous users** — The `organizations` table RLS only allows SELECT for authenticated org members. When someone scans a QR code (anonymous), the org name query silently fails, so "Issuer" is blank.
 
-Create a **SECURITY DEFINER database function** `create_user_organization` that handles org creation and membership atomically, bypassing RLS. Then update all three pages to call this function via `supabase.rpc()` instead of direct `.insert()`.
+2. **Verification page UI is functional but not polished** — Needs a cleaner single-screen design with a verification badge, better mobile layout, and status handling for revoked certificates.
 
 ## Plan
 
-### Step 1: Database migration
-Create a new `create_user_organization` function:
+### Step 1: Database migration — Allow anon users to read org name for verification
+
+Add a `SECURITY DEFINER` function `get_org_name_for_certificate` that takes a certificate ID and returns the org name, bypassing RLS safely:
+
 ```sql
-CREATE OR REPLACE FUNCTION public.create_user_organization(
-  _name text,
-  _slug text,
-  _owner_id uuid
-) RETURNS uuid
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
+CREATE OR REPLACE FUNCTION public.get_org_name_for_certificate(_cert_id uuid)
+RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-DECLARE
-  _org_id uuid;
-BEGIN
-  -- Check caller is the owner
-  IF auth.uid() IS DISTINCT FROM _owner_id THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
-
-  INSERT INTO organizations (name, slug, owner_id)
-  VALUES (_name, _slug, _owner_id)
-  RETURNING id INTO _org_id;
-
-  RETURN _org_id;
-END;
+  SELECT o.name FROM organizations o
+  JOIN certificates c ON c.organization_id = o.id
+  WHERE c.id = _cert_id
+  LIMIT 1;
 $$;
 ```
 
-### Step 2: Update `GenerateCertificates.tsx`
-Replace the direct `.insert()` on organizations (lines 67-71) with:
-```ts
-const { data: newOrgId, error } = await supabase.rpc('create_user_organization', {
-  _name: 'My Organization',
-  _slug: slug,
-  _owner_id: user.id,
-});
-org = { id: newOrgId, name: 'My Organization' };
-```
+### Step 2: Redesign Verify page UI
 
-### Step 3: Update `TemplateBuilder.tsx`
-Same change -- replace `.insert()` on organizations with `supabase.rpc('create_user_organization', ...)`.
+Update `src/pages/Verify.tsx` with:
+- Clean single-screen layout optimized for mobile (QR scanners open phone browsers)
+- Green verification badge with checkmark for valid certificates
+- Red "Invalid Certificate" block for not-found
+- "Revoked" status with warning styling
+- Show: Holder name, Course/Program (from recipient_data), Certificate ID, Issuer (org name via RPC), Issue Date, Status
+- Replace direct org query with `supabase.rpc('get_org_name_for_certificate', { _cert_id: data.id })`
+- CertifyPro branding in header, minimal footer
 
-### Step 4: Update `Dashboard.tsx`
-Same pattern for the org creation logic (if it exists there).
+### Step 3: Auto-verify on page load
+
+Already works via `useEffect` with `tokenFromUrl`. No change needed — just confirming QR scan → auto-lookup flow is intact.
 
 ---
 
-**Technical details:** The `SECURITY DEFINER` function runs as the DB owner, bypassing RLS. It still validates `auth.uid() = _owner_id` inside the function body for security. The existing `auto_add_org_owner` trigger will still fire, adding the user as an org member automatically.
+**Technical note:** The core QR → verify flow already works end-to-end. The main fix is the RLS issue preventing org name display for anonymous visitors, plus UI improvements for a professional verification experience.
 
