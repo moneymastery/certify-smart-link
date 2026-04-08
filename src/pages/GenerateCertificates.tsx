@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { format } from "date-fns";
 import {
   ShieldCheck,
   ArrowLeft,
@@ -8,12 +9,16 @@ import {
   Download,
   CheckCircle,
   AlertCircle,
+  CalendarIcon,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import CSVUpload from "@/components/dashboard/CSVUpload";
 import { useCertificateGeneration } from "@/hooks/use-certificate-generation";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +50,7 @@ const GenerateCertificates = () => {
   const [setupError, setSetupError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [verificationFields, setVerificationFields] = useState<string[]>([]);
+  const [issueDate, setIssueDate] = useState<Date>(new Date());
   const { generateBatch, downloadBatchAsZip, generating, progress, total } = useCertificateGeneration();
 
   const [generatedCerts, setGeneratedCerts] = useState<GeneratedCertificate[]>([]);
