@@ -478,6 +478,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </div>
             </div>
 
+            <div className="rounded-lg border border-border overflow-hidden">
               <div className="bg-muted px-4 py-2 flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-muted-foreground">Preview ({csvRows.length} recipients)</span>
                 <span className="text-xs text-muted-foreground">Showing all uploaded rows</span>
