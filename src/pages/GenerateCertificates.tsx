@@ -39,6 +39,7 @@ const GenerateCertificates = () => {
   const [emailColumn, setEmailColumn] = useState("");
   const [orgId, setOrgId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const [setupLoading, setSetupLoading] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
 
@@ -77,16 +78,19 @@ const GenerateCertificates = () => {
         setOrgId(org.id);
         setOrgName(org.name);
 
-        const { data: templates, error: templateLookupError } = await supabase
+        const { data: templateList, error: templateLookupError } = await supabase
           .from("templates")
-          .select("id")
+          .select("id, name")
           .eq("organization_id", org.id)
-          .limit(1);
+          .order("created_at", { ascending: false });
 
         if (templateLookupError) throw templateLookupError;
 
-        let tmpl = templates?.[0];
-        if (!tmpl) {
+        if (templateList && templateList.length > 0) {
+          setTemplates(templateList);
+          setTemplateId(templateList[0].id);
+        } else {
+          // Auto-create a default template
           const { data: newTemplate, error: templateInsertError } = await supabase
             .from("templates")
             .insert({
@@ -96,16 +100,15 @@ const GenerateCertificates = () => {
               width_px: 842,
               height_px: 595,
             })
-            .select("id")
+            .select("id, name")
             .single();
 
           if (templateInsertError || !newTemplate) {
             throw templateInsertError ?? new Error("Could not create template");
           }
-          tmpl = newTemplate;
+          setTemplates([newTemplate]);
+          setTemplateId(newTemplate.id);
         }
-
-        setTemplateId(tmpl.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Could not prepare certificate generation.";
         setSetupError(message);
@@ -158,6 +161,15 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
+    // Fetch selected template data + fields
+    const [templateResult, fieldsResult] = await Promise.all([
+      supabase.from("templates").select("*").eq("id", templateId).single(),
+      supabase.from("template_fields").select("*").eq("template_id", templateId).order("sort_order"),
+    ]);
+
+    const tmplData = templateResult.data;
+    const tmplFields = fieldsResult.data || [];
+
     const { data: batch, error: batchError } = await supabase
       .from("certificate_batches")
       .insert({
@@ -183,13 +195,27 @@ const GenerateCertificates = () => {
       recipientData: row,
     }));
 
+    // Build fields config: use saved template fields, then fill in any CSV columns not already mapped
+    const savedFieldKeys = new Set(tmplFields.map((f: any) => f.field_key));
+    const mappedFields = tmplFields.map((f: any) => ({
+      fieldKey: f.field_key,
+      label: f.label,
+      xPosition: Number(f.x_position),
+      yPosition: Number(f.y_position),
+      fontSize: f.font_size,
+      fontColor: f.font_color,
+      textAlign: f.text_align as "left" | "center" | "right",
+      maxWidth: f.max_width ?? undefined,
+    }));
+
+    // Add extra CSV columns not in template as fallback fields
     const extraFields = csvHeaders
-      .filter((h) => h !== nameColumn && h !== emailColumn)
-      .map((h) => ({
+      .filter((h) => h !== nameColumn && h !== emailColumn && !savedFieldKeys.has(h))
+      .map((h, i) => ({
         fieldKey: h,
-        label: h.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        xPosition: 0,
-        yPosition: 0,
+        label: h.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        xPosition: 50,
+        yPosition: 60 + i * 5,
         fontSize: 12,
         fontColor: "#333333",
         textAlign: "center" as const,
@@ -197,11 +223,17 @@ const GenerateCertificates = () => {
       }));
 
     const config = {
-      templateName: "Default Template",
+      templateName: tmplData?.name || "Default Template",
       organizationName: orgName,
-      width: 842,
-      height: 595,
-      fields: extraFields,
+      width: tmplData?.width_px || 842,
+      height: tmplData?.height_px || 595,
+      fields: [...mappedFields, ...extraFields],
+      assets: {
+        backgroundUrl: tmplData?.background_url,
+        logoUrl: tmplData?.logo_url,
+        signatureUrl: tmplData?.signature_url,
+        sealUrl: tmplData?.seal_url,
+      },
     };
 
     const results = await generateBatch(batchRows, config, orgId, templateId, batch.id);
@@ -342,6 +374,21 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                   placeholder="e.g. Acme Training Institute"
                 />
               </div>
+
+              {templates.length > 1 && (
+                <div className="space-y-2">
+                  <Label>Certificate Template</Label>
+                  <select
+                    value={templateId || ""}
+                    onChange={(e) => setTemplateId(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
