@@ -1,6 +1,3 @@
-import { Play, Download, FileText } from "lucide-react";
-import { useState } from "react";
-
 const steps = [
   { step: "01", title: "Upload Template", description: "Upload your certificate background image or PDF, along with your logo and signature." },
   { step: "02", title: "Map Fields", description: "Define where recipient name, date, certificate ID, and other fields appear on the template." },
