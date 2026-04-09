@@ -36,50 +36,11 @@ const HowItWorks = () => {
           ))}
         </div>
 
-        {/* Video & Resources Section */}
-        <div className="mt-16 space-y-8">
-          {/* Video */}
-          <div className="rounded-xl overflow-hidden border border-border bg-card shadow-sm">
-            {showVideo ? (
-              <video
-                src="/CertifyPro-Demo.mp4"
-                controls
-                autoPlay
-                className="w-full aspect-video"
-              />
-            ) : (
-              <button
-                onClick={() => setShowVideo(true)}
-                className="w-full aspect-video bg-gradient-to-br from-primary to-primary/80 flex flex-col items-center justify-center gap-4 cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                <div className="w-20 h-20 rounded-full bg-accent flex items-center justify-center shadow-lg">
-                  <Play className="w-8 h-8 text-accent-foreground ml-1" />
-                </div>
-                <span className="text-primary-foreground text-lg font-semibold">Watch Demo Video</span>
-                <span className="text-primary-foreground/60 text-sm">See CertifyPro in action — 15 seconds</span>
-              </button>
-            )}
-          </div>
-
-          {/* Download links */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href="/CertifyPro-Overview.pptx"
-              download
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-accent text-accent-foreground font-semibold hover:opacity-90 transition-opacity"
-            >
-              <FileText className="w-5 h-5" />
-              Download Presentation (PPTX)
-            </a>
-            <a
-              href="/CertifyPro-Demo.mp4"
-              download
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border bg-card text-foreground font-semibold hover:bg-muted transition-colors"
-            >
-              <Download className="w-5 h-5" />
-              Download Demo Video
-            </a>
-          </div>
+        {/* CTA */}
+        <div className="mt-12 text-center">
+          <p className="text-muted-foreground text-sm">
+            Ready to get started? Create your first template in minutes.
+          </p>
         </div>
       </div>
     </section>
