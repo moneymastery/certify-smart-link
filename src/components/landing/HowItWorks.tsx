@@ -6,7 +6,6 @@ const steps = [
 ];
 
 const HowItWorks = () => {
-  const [showVideo, setShowVideo] = useState(false);
 
   return (
     <section id="how-it-works" className="section-padding">
