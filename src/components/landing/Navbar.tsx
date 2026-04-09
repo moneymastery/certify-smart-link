@@ -17,7 +17,7 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-8">
           <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
           <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-          <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
         </div>
 
         <div className="hidden md:flex items-center gap-3">
@@ -38,7 +38,7 @@ const Navbar = () => {
         <div className="md:hidden bg-background border-b border-border px-6 py-4 space-y-3">
           <a href="#features" className="block text-sm text-muted-foreground">Features</a>
           <a href="#how-it-works" className="block text-sm text-muted-foreground">How It Works</a>
-          <a href="#pricing" className="block text-sm text-muted-foreground">Pricing</a>
+          <a href="#faq" className="block text-sm text-muted-foreground">FAQ</a>
           <div className="flex gap-3 pt-2">
             <Button variant="ghost" size="sm" asChild><Link to="/login">Sign In</Link></Button>
             <Button variant="hero" size="sm" asChild><Link to="/dashboard">Get Started</Link></Button>

@@ -11,6 +11,7 @@ import GenerateCertificates from "./pages/GenerateCertificates.tsx";
 import TemplateBuilder from "./pages/TemplateBuilder.tsx";
 import Verify from "./pages/Verify.tsx";
 import Login from "./pages/Login.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/verify" element={<Verify />} />
             <Route path="/verify/:id" element={<Verify />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

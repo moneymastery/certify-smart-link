@@ -258,10 +258,28 @@ const Dashboard = () => {
       </aside>
 
       <main className="flex-1 overflow-auto">
-        <header className="h-16 border-b border-border flex items-center justify-between px-6">
+        {/* Mobile tab bar */}
+        <div className="md:hidden flex border-b border-border bg-card overflow-x-auto">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => setActiveItem(item.label)}
+              className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
+                activeItem === item.label
+                  ? "border-primary text-primary font-medium"
+                  : "border-transparent text-muted-foreground"
+              }`}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        <header className="h-16 border-b border-border flex items-center justify-between px-4 sm:px-6">
           <h1 className="font-heading text-xl font-semibold text-foreground">{activeItem}</h1>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="hidden sm:inline-flex">
               <Link to="/templates/new">
                 <Plus className="h-4 w-4" />
                 New Template
@@ -270,7 +288,8 @@ const Dashboard = () => {
             <Button variant="hero" size="sm" asChild>
               <Link to="/generate">
                 <Plus className="h-4 w-4" />
-                Generate Certificates
+                <span className="hidden sm:inline">Generate Certificates</span>
+                <span className="sm:hidden">Generate</span>
               </Link>
             </Button>
           </div>
