@@ -280,7 +280,39 @@ const Dashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card">
+      {/* Delete template dialog */}
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => { if (!open) setDeleteTemplateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete template "{deleteTemplateName}"?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete this template and its fields. Existing certificates are not affected.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingTemplate}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTemplate} disabled={deletingTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deletingTemplate ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename template dialog */}
+      <AlertDialog open={!!renameTemplateId} onOpenChange={(open) => { if (!open) setRenameTemplateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rename template</AlertDialogTitle>
+            <AlertDialogDescription>Enter a new name for this template.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="Template name" className="mt-2" />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={renaming}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRenameTemplate} disabled={renaming || !renameValue.trim()}>
+              {renaming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Rename
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
         <div className="h-16 flex items-center gap-2 px-6 border-b border-border">
           <ShieldCheck className="h-5 w-5 text-accent" />
           <span className="font-heading text-lg font-semibold text-foreground">CertifyPro</span>
