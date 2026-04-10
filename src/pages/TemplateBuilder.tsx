@@ -411,6 +411,7 @@ const TemplateBuilder = () => {
                 src={signatureUrl}
                 alt="Signature"
                 onMouseDown={(e) => handleMouseDown("signature", e)}
+                onTouchStart={(e) => handleMouseDown("signature", e)}
                 className={`absolute h-10 object-contain cursor-move select-none ${
                   selectedAsset === "signature" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
