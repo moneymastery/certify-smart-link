@@ -54,6 +54,8 @@ type DragTarget = string | "logo" | "signature" | "seal";
 const TemplateBuilder = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEditMode = !!editId;
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [templateName, setTemplateName] = useState("My Certificate Template");
@@ -84,6 +86,7 @@ const TemplateBuilder = () => {
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
   const childClickedRef = useRef(false);
 
