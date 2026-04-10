@@ -515,53 +515,41 @@ const TemplateBuilder = () => {
         </div>
 
         {/* Right sidebar - always visible */}
-        <aside className="hidden md:block w-64 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
-          {selectedAsset && (
-            <>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Position
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">X (%)</Label>
-                  <Input
-                    type="number"
-                    value={Math.round(
-                      selectedAsset === "logo" ? logoPos.x : selectedAsset === "signature" ? signaturePos.x : sealPos.x
-                    )}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, x: v }));
-                      else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, x: v }));
-                      else setSealPos((p) => ({ ...p, x: v }));
-                    }}
-                    className="h-8 text-sm"
-                    min={0}
-                    max={100}
-                  />
+        <aside className="hidden md:block w-72 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
+          {selectedAsset && (() => {
+            const posState = selectedAsset === "logo" ? logoPos : selectedAsset === "signature" ? signaturePos : sealPos;
+            const setPos = selectedAsset === "logo" ? setLogoPos : selectedAsset === "signature" ? setSignaturePos : setSealPos;
+            const sizeState = selectedAsset === "logo" ? logoSize : selectedAsset === "signature" ? signatureSize : sealSize;
+            const setSize = selectedAsset === "logo" ? setLogoSize : selectedAsset === "signature" ? setSignatureSize : setSealSize;
+            return (
+              <>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Properties
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">X (%)</Label>
+                    <Input type="number" value={Math.round(posState.x)} onChange={(e) => setPos((p) => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Y (%)</Label>
+                    <Input type="number" value={Math.round(posState.y)} onChange={(e) => setPos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Y (%)</Label>
-                  <Input
-                    type="number"
-                    value={Math.round(
-                      selectedAsset === "logo" ? logoPos.y : selectedAsset === "signature" ? signaturePos.y : sealPos.y
-                    )}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, y: v }));
-                      else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, y: v }));
-                      else setSealPos((p) => ({ ...p, y: v }));
-                    }}
-                    className="h-8 text-sm"
-                    min={0}
-                    max={100}
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Width (px)</Label>
+                    <Input type="number" value={sizeState.width || ""} onChange={(e) => setSize((s) => ({ ...s, width: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Height (px)</Label>
+                    <Input type="number" value={sizeState.height || ""} onChange={(e) => setSize((s) => ({ ...s, height: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">Drag the asset on the canvas or type exact coordinates.</p>
-            </>
-          )}
+                <p className="text-xs text-muted-foreground">Set 0 or empty for auto-sizing.</p>
+              </>
+            );
+          })()}
 
           {selectedFieldData && (
             <>
@@ -575,117 +563,111 @@ const TemplateBuilder = () => {
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Label</Label>
-                  <Input
-                    value={selectedFieldData.label}
-                    onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })}
-                    className="h-8 text-sm"
-                  />
+                  <Input value={selectedFieldData.label} onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })} className="h-8 text-sm" />
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs">Field Key (CSV column)</Label>
-                  <Input
-                    value={selectedFieldData.fieldKey}
-                    onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })}
-                    className="h-8 text-sm font-mono"
-                  />
+                  <Input value={selectedFieldData.fieldKey} onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })} className="h-8 text-sm font-mono" />
                 </div>
-
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">X (%)</Label>
-                    <Input
-                      type="number"
-                      value={Math.round(selectedFieldData.xPosition)}
-                      onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })}
-                      className="h-8 text-sm"
-                      min={0}
-                      max={100}
-                    />
+                    <Input type="number" value={Math.round(selectedFieldData.xPosition)} onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })} className="h-8 text-sm" min={0} max={100} />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Y (%)</Label>
-                    <Input
-                      type="number"
-                      value={Math.round(selectedFieldData.yPosition)}
-                      onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })}
-                      className="h-8 text-sm"
-                      min={0}
-                      max={100}
-                    />
+                    <Input type="number" value={Math.round(selectedFieldData.yPosition)} onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })} className="h-8 text-sm" min={0} max={100} />
                   </div>
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs">Font Size</Label>
-                  <Input
-                    type="number"
-                    value={selectedFieldData.fontSize}
-                    onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })}
-                    className="h-8 text-sm"
-                    min={8}
-                    max={72}
-                  />
+                  <Input type="number" value={selectedFieldData.fontSize} onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })} className="h-8 text-sm" min={8} max={72} />
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs">Color</Label>
                   <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={selectedFieldData.fontColor}
-                      onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                      className="h-8 w-8 rounded border border-border cursor-pointer"
-                    />
-                    <Input
-                      value={selectedFieldData.fontColor}
-                      onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                      className="h-8 text-sm font-mono flex-1"
-                    />
+                    <input type="color" value={selectedFieldData.fontColor} onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })} className="h-8 w-8 rounded border border-border cursor-pointer" />
+                    <Input value={selectedFieldData.fontColor} onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })} className="h-8 text-sm font-mono flex-1" />
                   </div>
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs">Align</Label>
                   <div className="flex gap-1">
                     {["left", "center", "right"].map((a) => (
-                      <Button
-                        key={a}
-                        variant={selectedFieldData.textAlign === a ? "default" : "outline"}
-                        size="sm"
-                        className="flex-1 h-7 text-xs capitalize"
-                        onClick={() => updateField(selectedFieldData.id, { textAlign: a })}
-                      >
-                        {a}
-                      </Button>
+                      <Button key={a} variant={selectedFieldData.textAlign === a ? "default" : "outline"} size="sm" className="flex-1 h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { textAlign: a })}>{a}</Button>
                     ))}
                   </div>
                 </div>
-
                 <div className="space-y-1">
                   <Label className="text-xs">Max Width (px)</Label>
-                  <Input
-                    type="number"
-                    value={selectedFieldData.maxWidth || ""}
-                    onChange={(e) =>
-                      updateField(selectedFieldData.id, {
-                        maxWidth: e.target.value ? Number(e.target.value) : null,
-                      })
-                    }
-                    className="h-8 text-sm"
-                    placeholder="Auto"
-                  />
+                  <Input type="number" value={selectedFieldData.maxWidth || ""} onChange={(e) => updateField(selectedFieldData.id, { maxWidth: e.target.value ? Number(e.target.value) : null })} className="h-8 text-sm" placeholder="Auto" />
                 </div>
               </div>
             </>
           )}
 
           {!selectedFieldData && !selectedAsset && (
-            <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+            <div className="flex flex-col items-center justify-center h-24 text-center text-muted-foreground">
               <PenTool className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm">Select a field or asset on the canvas to edit its properties</p>
+              <p className="text-sm">Select a field or asset to edit</p>
             </div>
           )}
+
+          {/* Display Toggles - always visible */}
+          <div className="border-t border-border pt-4 space-y-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Display Options</h3>
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">QR Code</Label>
+              <Switch checked={showQrCode} onCheckedChange={setShowQrCode} />
+            </div>
+            {showQrCode && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">QR X (%)</Label>
+                  <Input type="number" value={Math.round(qrCodePos.x)} onChange={(e) => setQrCodePos((p) => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">QR Y (%)</Label>
+                  <Input type="number" value={Math.round(qrCodePos.y)} onChange={(e) => setQrCodePos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Certificate ID</Label>
+              <Switch checked={showCertificateId} onCheckedChange={setShowCertificateId} />
+            </div>
+            {showCertificateId && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">ID X (%)</Label>
+                  <Input type="number" value={Math.round(certIdPos.x)} onChange={(e) => setCertIdPos((p) => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">ID Y (%)</Label>
+                  <Input type="number" value={Math.round(certIdPos.y)} onChange={(e) => setCertIdPos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Organization Name</Label>
+              <Switch checked={showOrgName} onCheckedChange={setShowOrgName} />
+            </div>
+            {showOrgName && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Org X (%)</Label>
+                  <Input type="number" value={Math.round(orgNamePos.x)} onChange={(e) => setOrgNamePos((p) => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Org Y (%)</Label>
+                  <Input type="number" value={Math.round(orgNamePos.y)} onChange={(e) => setOrgNamePos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
+                </div>
+              </div>
+            )}
+          </div>
         </aside>
       </div>
     </div>
