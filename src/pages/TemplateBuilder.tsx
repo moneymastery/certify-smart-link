@@ -319,7 +319,7 @@ const TemplateBuilder = () => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - uploads */}
-        <aside className="w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
+        <aside className="hidden md:block w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assets</h3>
 
           {[
