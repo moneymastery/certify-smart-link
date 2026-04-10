@@ -648,14 +648,25 @@ const TemplateBuilder = () => {
         {/* Right sidebar - always visible */}
         <aside className="hidden md:block w-72 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
           {selectedAsset && (() => {
-            const posState = selectedAsset === "logo" ? logoPos : selectedAsset === "signature" ? signaturePos : sealPos;
-            const setPos = selectedAsset === "logo" ? setLogoPos : selectedAsset === "signature" ? setSignaturePos : setSealPos;
+            // Image assets (logo, signature, seal) have size controls
+            const isImageAsset = selectedAsset === "logo" || selectedAsset === "signature" || selectedAsset === "seal";
+            // System elements (qrCode, certId, orgName) only have position
+            const posMap: Record<string, [AssetPosition, React.Dispatch<React.SetStateAction<AssetPosition>>]> = {
+              logo: [logoPos, setLogoPos],
+              signature: [signaturePos, setSignaturePos],
+              seal: [sealPos, setSealPos],
+              qrCode: [qrCodePos, setQrCodePos],
+              certId: [certIdPos, setCertIdPos],
+              orgName: [orgNamePos, setOrgNamePos],
+            };
+            const [posState, setPos] = posMap[selectedAsset] || [{ x: 50, y: 50 }, () => {}];
             const sizeState = selectedAsset === "logo" ? logoSize : selectedAsset === "signature" ? signatureSize : sealSize;
             const setSize = selectedAsset === "logo" ? setLogoSize : selectedAsset === "signature" ? setSignatureSize : setSealSize;
+            const labelMap: Record<string, string> = { logo: "Logo", signature: "Signature", seal: "Seal", qrCode: "QR Code", certId: "Certificate ID", orgName: "Organization Name" };
             return (
               <>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Properties
+                  {labelMap[selectedAsset]} Properties
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -667,17 +678,21 @@ const TemplateBuilder = () => {
                     <Input type="number" value={Math.round(posState.y)} onChange={(e) => setPos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Width (px)</Label>
-                    <Input type="number" value={sizeState.width || ""} onChange={(e) => setSize((s) => ({ ...s, width: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Height (px)</Label>
-                    <Input type="number" value={sizeState.height || ""} onChange={(e) => setSize((s) => ({ ...s, height: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">Set 0 or empty for auto-sizing.</p>
+                {isImageAsset && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Width (px)</Label>
+                        <Input type="number" value={sizeState.width || ""} onChange={(e) => setSize((s) => ({ ...s, width: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Height (px)</Label>
+                        <Input type="number" value={sizeState.height || ""} onChange={(e) => setSize((s) => ({ ...s, height: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Set 0 or empty for auto-sizing.</p>
+                  </>
+                )}
               </>
             );
           })()}
