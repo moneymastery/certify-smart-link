@@ -303,19 +303,34 @@ export type Database = {
       templates: {
         Row: {
           background_url: string | null
+          cert_id_x: number
+          cert_id_y: number
           created_at: string
           created_by: string
           height_px: number
           id: string
+          logo_height: number
           logo_url: string | null
+          logo_width: number
           logo_x: number
           logo_y: number
           name: string
+          org_name_x: number
+          org_name_y: number
           organization_id: string
+          qr_code_x: number
+          qr_code_y: number
+          seal_height: number
           seal_url: string | null
+          seal_width: number
           seal_x: number
           seal_y: number
+          show_certificate_id: boolean
+          show_org_name: boolean
+          show_qr_code: boolean
+          signature_height: number
           signature_url: string | null
+          signature_width: number
           signature_x: number
           signature_y: number
           updated_at: string
@@ -324,19 +339,34 @@ export type Database = {
         }
         Insert: {
           background_url?: string | null
+          cert_id_x?: number
+          cert_id_y?: number
           created_at?: string
           created_by: string
           height_px?: number
           id?: string
+          logo_height?: number
           logo_url?: string | null
+          logo_width?: number
           logo_x?: number
           logo_y?: number
           name: string
+          org_name_x?: number
+          org_name_y?: number
           organization_id: string
+          qr_code_x?: number
+          qr_code_y?: number
+          seal_height?: number
           seal_url?: string | null
+          seal_width?: number
           seal_x?: number
           seal_y?: number
+          show_certificate_id?: boolean
+          show_org_name?: boolean
+          show_qr_code?: boolean
+          signature_height?: number
           signature_url?: string | null
+          signature_width?: number
           signature_x?: number
           signature_y?: number
           updated_at?: string
@@ -345,19 +375,34 @@ export type Database = {
         }
         Update: {
           background_url?: string | null
+          cert_id_x?: number
+          cert_id_y?: number
           created_at?: string
           created_by?: string
           height_px?: number
           id?: string
+          logo_height?: number
           logo_url?: string | null
+          logo_width?: number
           logo_x?: number
           logo_y?: number
           name?: string
+          org_name_x?: number
+          org_name_y?: number
           organization_id?: string
+          qr_code_x?: number
+          qr_code_y?: number
+          seal_height?: number
           seal_url?: string | null
+          seal_width?: number
           seal_x?: number
           seal_y?: number
+          show_certificate_id?: boolean
+          show_org_name?: boolean
+          show_qr_code?: boolean
+          signature_height?: number
           signature_url?: string | null
+          signature_width?: number
           signature_x?: number
           signature_y?: number
           updated_at?: string

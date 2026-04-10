@@ -25,7 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
-type Step = "upload" | "configure" | "generating" | "complete";
+type Step = "upload" | "mapping" | "configure" | "generating" | "complete";
 
 type GeneratedCertificate = {
   serialNumber: string;
@@ -37,6 +37,7 @@ type GeneratedCertificate = {
 const GenerateCertificates = () => {
   const { user } = useAuth();
   const [step, setStep] = useState<Step>("upload");
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [batchName, setBatchName] = useState("");
@@ -128,6 +129,8 @@ const GenerateCertificates = () => {
     init();
   }, [user]);
 
+  const [templateFields, setTemplateFields] = useState<{ field_key: string; label: string }[]>([]);
+
   const handleDataParsed = (headers: string[], rows: Record<string, string>[]) => {
     setCsvHeaders(headers);
     setCsvRows(rows);
@@ -142,14 +145,36 @@ const GenerateCertificates = () => {
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
-    // Pre-select all non-email fields for verification display
     const preSelected = headers.filter(
       (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
     );
     setVerificationFields(preSelected);
 
-    setStep("configure");
+    setStep("mapping");
   };
+
+  // Load template fields when template changes
+  useEffect(() => {
+    if (!templateId) return;
+    const loadFields = async () => {
+      const { data } = await supabase
+        .from("template_fields")
+        .select("field_key, label")
+        .eq("template_id", templateId)
+        .order("sort_order");
+      setTemplateFields(data || []);
+      // Auto-map by matching field_key to CSV header
+      if (data && csvHeaders.length > 0) {
+        const autoMap: Record<string, string> = {};
+        for (const f of data) {
+          const match = csvHeaders.find((h) => h.toLowerCase() === f.field_key.toLowerCase());
+          if (match) autoMap[f.field_key] = match;
+        }
+        setFieldMapping(autoMap);
+      }
+    };
+    loadFields();
+  }, [templateId, csvHeaders]);
 
   const handleGenerate = async () => {
     if (setupLoading) {
@@ -207,44 +232,44 @@ const GenerateCertificates = () => {
       return;
     }
 
-    const batchRows = csvRows.map((row) => ({
-      recipientName: row[nameColumn] || "Unknown",
-      recipientEmail: emailColumn ? row[emailColumn] : undefined,
-      recipientData: row,
-    }));
+    // Build recipientData using field mapping so only mapped fields get values
+    const batchRows = csvRows.map((row) => {
+      const mappedData: Record<string, string> = {};
+      for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
+        if (csvCol && row[csvCol]) {
+          mappedData[fieldKey] = row[csvCol];
+        }
+      }
+      // Also keep all raw CSV data for recipient_data storage
+      return {
+        recipientName: row[nameColumn] || "Unknown",
+        recipientEmail: emailColumn ? row[emailColumn] : undefined,
+        recipientData: { ...row, ...mappedData },
+      };
+    });
 
-    const savedFieldKeys = new Set(tmplFields.map((f: any) => f.field_key));
-    const mappedFields = tmplFields.map((f: any) => ({
-      fieldKey: f.field_key,
-      label: f.label,
-      xPosition: Number(f.x_position),
-      yPosition: Number(f.y_position),
-      fontSize: f.font_size,
-      fontColor: f.font_color,
-      textAlign: f.text_align as "left" | "center" | "right",
-      maxWidth: f.max_width ?? undefined,
-    }));
-
-    const extraFields = csvHeaders
-      .filter((h) => h !== nameColumn && h !== emailColumn && !savedFieldKeys.has(h))
-      .map((h, i) => ({
-        fieldKey: h,
-        label: h.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        xPosition: 50,
-        yPosition: 60 + i * 5,
-        fontSize: 12,
-        fontColor: "#333333",
-        textAlign: "center" as const,
-        maxWidth: undefined,
+    // Only use fields that have a mapping assigned
+    const mappedFields = tmplFields
+      .filter((f: any) => fieldMapping[f.field_key])
+      .map((f: any) => ({
+        fieldKey: f.field_key,
+        label: f.label,
+        xPosition: Number(f.x_position),
+        yPosition: Number(f.y_position),
+        fontSize: f.font_size,
+        fontColor: f.font_color,
+        textAlign: f.text_align as "left" | "center" | "right",
+        maxWidth: f.max_width ?? undefined,
       }));
 
+    const td = tmplData as any;
     const config = {
       templateName: tmplData?.name || "Default Template",
       organizationName: orgName,
       width: tmplData?.width_px || 842,
       height: tmplData?.height_px || 595,
       issueDate: issueDate.toISOString(),
-      fields: [...mappedFields, ...extraFields],
+      fields: mappedFields,
       assets: {
         backgroundUrl: tmplData?.background_url,
         logoUrl: tmplData?.logo_url,
@@ -256,6 +281,23 @@ const GenerateCertificates = () => {
         signatureY: tmplData?.signature_y != null ? Number(tmplData.signature_y) : undefined,
         sealX: tmplData?.seal_x != null ? Number(tmplData.seal_x) : undefined,
         sealY: tmplData?.seal_y != null ? Number(tmplData.seal_y) : undefined,
+        logoWidth: td?.logo_width != null ? Number(td.logo_width) : undefined,
+        logoHeight: td?.logo_height != null ? Number(td.logo_height) : undefined,
+        signatureWidth: td?.signature_width != null ? Number(td.signature_width) : undefined,
+        signatureHeight: td?.signature_height != null ? Number(td.signature_height) : undefined,
+        sealWidth: td?.seal_width != null ? Number(td.seal_width) : undefined,
+        sealHeight: td?.seal_height != null ? Number(td.seal_height) : undefined,
+      },
+      displayToggles: {
+        showQrCode: td?.show_qr_code !== false,
+        showCertificateId: td?.show_certificate_id !== false,
+        showOrgName: td?.show_org_name !== false,
+        qrCodeX: td?.qr_code_x != null ? Number(td.qr_code_x) : undefined,
+        qrCodeY: td?.qr_code_y != null ? Number(td.qr_code_y) : undefined,
+        certIdX: td?.cert_id_x != null ? Number(td.cert_id_x) : undefined,
+        certIdY: td?.cert_id_y != null ? Number(td.cert_id_y) : undefined,
+        orgNameX: td?.org_name_x != null ? Number(td.org_name_x) : undefined,
+        orgNameY: td?.org_name_y != null ? Number(td.org_name_y) : undefined,
       },
     };
 
@@ -328,24 +370,24 @@ const GenerateCertificates = () => {
 
       <main className="container mx-auto max-w-5xl px-6 py-10">
         <div className="flex items-center gap-2 mb-10">
-          {(["upload", "configure", "generating", "complete"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                step === s
-                  ? "bg-primary text-primary-foreground"
-                  : ["upload", "configure", "generating", "complete"].indexOf(step) > i
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted text-muted-foreground"
-              }`}>
-                {["upload", "configure", "generating", "complete"].indexOf(step) > i ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  i + 1
-                )}
+          {(["upload", "mapping", "configure", "generating", "complete"] as Step[]).map((s, i) => {
+            const allSteps: Step[] = ["upload", "mapping", "configure", "generating", "complete"];
+            const currentIdx = allSteps.indexOf(step);
+            return (
+              <div key={s} className="flex items-center gap-2">
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                  step === s
+                    ? "bg-primary text-primary-foreground"
+                    : currentIdx > i
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}>
+                  {currentIdx > i ? <CheckCircle className="h-4 w-4" /> : i + 1}
+                </div>
+                {i < 4 && <div className="w-10 h-px bg-border" />}
               </div>
-              {i < 3 && <div className="w-12 h-px bg-border" />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {step === "upload" && (
@@ -364,6 +406,105 @@ const GenerateCertificates = () => {
 John Doe,john@example.com,Web Development,2026-04-07
 Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </pre>
+            </div>
+          </div>
+        )}
+
+        {step === "mapping" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-heading text-2xl font-bold text-foreground">Map Fields</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Link each template field to a column from your uploaded file. Only mapped fields will appear on the certificate.
+              </p>
+            </div>
+
+            {templates.length > 0 && (
+              <div className="space-y-2">
+                <Label>Certificate Template</Label>
+                <select
+                  value={templateId || ""}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name Column *</Label>
+                <select
+                  value={nameColumn}
+                  onChange={(e) => setNameColumn(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select column...</option>
+                  {csvHeaders.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Email Column (optional)</Label>
+                <select
+                  value={emailColumn}
+                  onChange={(e) => setEmailColumn(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">None</option>
+                  {csvHeaders.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {templateFields.length > 0 && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Template Field → CSV Column</Label>
+                <p className="text-xs text-muted-foreground">
+                  Map each template field to the CSV column that contains its data. Leave unmapped to skip.
+                </p>
+                <div className="space-y-2">
+                  {templateFields
+                    .filter((f) => f.field_key !== "recipient_name")
+                    .map((f) => (
+                    <div key={f.field_key} className="flex items-center gap-3">
+                      <span className="text-sm text-foreground w-40 truncate">{f.label}</span>
+                      <span className="text-muted-foreground text-xs">→</span>
+                      <select
+                        value={fieldMapping[f.field_key] || ""}
+                        onChange={(e) =>
+                          setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                        }
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">— Skip —</option>
+                        {csvHeaders.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {templateFields.length === 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                No custom fields found in the selected template. All CSV columns will be stored as data but only the recipient name will be rendered on the certificate.
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep("upload")}>Back</Button>
+              <Button variant="hero" onClick={() => setStep("configure")} disabled={!nameColumn}>
+                Continue to Configure
+              </Button>
             </div>
           </div>
         )}
@@ -446,50 +587,6 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 <p className="text-xs text-muted-foreground">This date appears on the certificate and verification page.</p>
               </div>
 
-              {templates.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Certificate Template</Label>
-                  <select
-                    value={templateId || ""}
-                    onChange={(e) => setTemplateId(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Name Column *</Label>
-                  <select
-                    value={nameColumn}
-                    onChange={(e) => setNameColumn(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">Select column...</option>
-                    {csvHeaders.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Email Column (optional)</Label>
-                  <select
-                    value={emailColumn}
-                    onChange={(e) => setEmailColumn(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">None</option>
-                    {csvHeaders.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
             </div>
 
             {/* Verification fields picker */}
@@ -551,7 +648,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep("upload")}>
+              <Button variant="outline" onClick={() => setStep("mapping")}>
                 Back
               </Button>
               <Button

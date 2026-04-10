@@ -20,6 +20,24 @@ export interface TemplateAssets {
   signatureY?: number;
   sealX?: number;
   sealY?: number;
+  logoWidth?: number;
+  logoHeight?: number;
+  signatureWidth?: number;
+  signatureHeight?: number;
+  sealWidth?: number;
+  sealHeight?: number;
+}
+
+export interface DisplayToggles {
+  showQrCode?: boolean;
+  showCertificateId?: boolean;
+  showOrgName?: boolean;
+  qrCodeX?: number;
+  qrCodeY?: number;
+  certIdX?: number;
+  certIdY?: number;
+  orgNameX?: number;
+  orgNameY?: number;
 }
 
 export interface GenerationConfig {
@@ -39,6 +57,7 @@ export interface GenerationConfig {
     maxWidth?: number;
   }[];
   assets?: TemplateAssets;
+  displayToggles?: DisplayToggles;
 }
 
 const hexToRgb = (hex: string) => {
@@ -128,14 +147,14 @@ export const generateCertificatePDF = async (
     page.drawText(certifyText, { x: (config.width - certifyWidth) / 2, y: config.height - 200, size: 12, font, color: rgb(0.4, 0.4, 0.4) });
   }
 
-  // Logo — use saved position or defaults
+  // Logo — use saved position and size
   if (assets?.logoUrl) {
     const logoBytes = await fetchImageBytes(assets.logoUrl);
     if (logoBytes) {
       try {
         const logoImage = await embedImage(pdfDoc, logoBytes, assets.logoUrl);
-        const logoH = 50;
-        const logoW = (logoImage.width / logoImage.height) * logoH;
+        const logoH = assets.logoHeight && assets.logoHeight > 0 ? assets.logoHeight : 50;
+        const logoW = assets.logoWidth && assets.logoWidth > 0 ? assets.logoWidth : (logoImage.width / logoImage.height) * logoH;
         const lx = (assets.logoX ?? 50) / 100 * config.width - logoW / 2;
         const ly = config.height - (assets.logoY ?? 5) / 100 * config.height - logoH / 2;
         page.drawImage(logoImage, { x: lx, y: ly, width: logoW, height: logoH });
@@ -202,14 +221,14 @@ export const generateCertificatePDF = async (
     });
   }
 
-  // Signature — use saved position
+  // Signature — use saved position and size
   if (assets?.signatureUrl) {
     const sigBytes = await fetchImageBytes(assets.signatureUrl);
     if (sigBytes) {
       try {
         const sigImage = await embedImage(pdfDoc, sigBytes, assets.signatureUrl);
-        const sigH = 40;
-        const sigW = (sigImage.width / sigImage.height) * sigH;
+        const sigH = assets.signatureHeight && assets.signatureHeight > 0 ? assets.signatureHeight : 40;
+        const sigW = assets.signatureWidth && assets.signatureWidth > 0 ? assets.signatureWidth : (sigImage.width / sigImage.height) * sigH;
         const sx = (assets.signatureX ?? 25) / 100 * config.width - sigW / 2;
         const sy = config.height - (assets.signatureY ?? 85) / 100 * config.height - sigH / 2;
         page.drawImage(sigImage, { x: sx, y: sy, width: sigW, height: sigH });
@@ -217,14 +236,14 @@ export const generateCertificatePDF = async (
     }
   }
 
-  // Seal — use saved position
+  // Seal — use saved position and size
   if (assets?.sealUrl) {
     const sealBytes = await fetchImageBytes(assets.sealUrl);
     if (sealBytes) {
       try {
         const sealImage = await embedImage(pdfDoc, sealBytes, assets.sealUrl);
-        const sealH = 60;
-        const sealW = (sealImage.width / sealImage.height) * sealH;
+        const sealH = assets.sealHeight && assets.sealHeight > 0 ? assets.sealHeight : 60;
+        const sealW = assets.sealWidth && assets.sealWidth > 0 ? assets.sealWidth : (sealImage.width / sealImage.height) * sealH;
         const sx = (assets.sealX ?? 80) / 100 * config.width - sealW / 2;
         const sy = config.height - (assets.sealY ?? 82) / 100 * config.height - sealH / 2;
         page.drawImage(sealImage, { x: sx, y: sy, width: sealW, height: sealH });
@@ -232,30 +251,52 @@ export const generateCertificatePDF = async (
     }
   }
 
+  const toggles = config.displayToggles;
+  const showCertId = toggles?.showCertificateId !== false;
+  const showQr = toggles?.showQrCode !== false;
+  const showOrg = toggles?.showOrgName !== false;
+
   // Certificate ID
-  const idText = `Certificate ID: ${data.serialNumber}`;
-  const idWidth = font.widthOfTextAtSize(idText, 9);
-  page.drawText(idText, { x: (config.width - idWidth) / 2, y: 80, size: 9, font, color: rgb(0.5, 0.5, 0.5) });
+  if (showCertId) {
+    const idText = `Certificate ID: ${data.serialNumber}`;
+    const idSize = 9;
+    const idWidth = font.widthOfTextAtSize(idText, idSize);
+    const cidXPct = toggles?.certIdX ?? 50;
+    const cidYPct = toggles?.certIdY ?? 90;
+    const cidX = (cidXPct / 100) * config.width - idWidth / 2;
+    const cidY = config.height - (cidYPct / 100) * config.height;
+    page.drawText(idText, { x: Math.max(10, cidX), y: cidY, size: idSize, font, color: rgb(0.5, 0.5, 0.5) });
+  }
 
   // QR Code
-  const verifyUrl = `${verifyBaseUrl}/verify/${data.verificationToken}`;
-  const qrDataUrl = await generateQRCodeDataUrl(verifyUrl);
-  const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), (c) => c.charCodeAt(0));
-  const qrImage = await pdfDoc.embedPng(qrImageBytes);
-  const qrSize = 80;
-  page.drawImage(qrImage, { x: config.width - qrSize - 45, y: 35, width: qrSize, height: qrSize });
+  if (showQr) {
+    const verifyUrl = `${verifyBaseUrl}/verify/${data.verificationToken}`;
+    const qrDataUrl = await generateQRCodeDataUrl(verifyUrl);
+    const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), (c) => c.charCodeAt(0));
+    const qrImage = await pdfDoc.embedPng(qrImageBytes);
+    const qrSize = 80;
+    const qrXPct = toggles?.qrCodeX ?? 90;
+    const qrYPct = toggles?.qrCodeY ?? 90;
+    const qrX = (qrXPct / 100) * config.width - qrSize / 2;
+    const qrY = config.height - (qrYPct / 100) * config.height - qrSize / 2;
+    page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
 
-  const scanText = "Scan to verify";
-  const scanWidth = font.widthOfTextAtSize(scanText, 7);
-  page.drawText(scanText, { x: config.width - qrSize - 45 + (qrSize - scanWidth) / 2, y: 27, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+    const scanText = "Scan to verify";
+    const scanWidth = font.widthOfTextAtSize(scanText, 7);
+    page.drawText(scanText, { x: qrX + (qrSize - scanWidth) / 2, y: qrY - 8, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+  }
 
   // Organization name
-  if (config.organizationName && !assets?.signatureUrl) {
-    page.drawText(config.organizationName, { x: 45, y: 50, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
-    page.drawLine({ start: { x: 45, y: 65 }, end: { x: 45 + fontBold.widthOfTextAtSize(config.organizationName, 10), y: 65 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
-    page.drawText("Authorized Signatory", { x: 45, y: 72, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
-  } else if (config.organizationName) {
-    page.drawText(config.organizationName, { x: 45, y: 50, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
+  if (showOrg && config.organizationName) {
+    const orgXPct = toggles?.orgNameX ?? 10;
+    const orgYPct = toggles?.orgNameY ?? 90;
+    const orgX = (orgXPct / 100) * config.width;
+    const orgY = config.height - (orgYPct / 100) * config.height;
+    page.drawText(config.organizationName, { x: orgX, y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
+    if (!assets?.signatureUrl) {
+      page.drawLine({ start: { x: orgX, y: orgY + 15 }, end: { x: orgX + fontBold.widthOfTextAtSize(config.organizationName, 10), y: orgY + 15 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
+      page.drawText("Authorized Signatory", { x: orgX, y: orgY + 22, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
+    }
   }
 
   return pdfDoc.save();
