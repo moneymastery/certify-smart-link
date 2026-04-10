@@ -247,6 +247,12 @@ const TemplateBuilder = () => {
       setSignaturePos({ x: clampX, y: clampY });
     } else if (dragging === "seal") {
       setSealPos({ x: clampX, y: clampY });
+    } else if (dragging === "qrCode") {
+      setQrCodePos({ x: clampX, y: clampY });
+    } else if (dragging === "certId") {
+      setCertIdPos({ x: clampX, y: clampY });
+    } else if (dragging === "orgName") {
+      setOrgNamePos({ x: clampX, y: clampY });
     } else {
       setFields((prev) =>
         prev.map((f) =>
