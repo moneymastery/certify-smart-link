@@ -587,50 +587,6 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 <p className="text-xs text-muted-foreground">This date appears on the certificate and verification page.</p>
               </div>
 
-              {templates.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Certificate Template</Label>
-                  <select
-                    value={templateId || ""}
-                    onChange={(e) => setTemplateId(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Name Column *</Label>
-                  <select
-                    value={nameColumn}
-                    onChange={(e) => setNameColumn(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">Select column...</option>
-                    {csvHeaders.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Email Column (optional)</Label>
-                  <select
-                    value={emailColumn}
-                    onChange={(e) => setEmailColumn(e.target.value)}
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    <option value="">None</option>
-                    {csvHeaders.map((h) => (
-                      <option key={h} value={h}>{h}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
             </div>
 
             {/* Verification fields picker */}
