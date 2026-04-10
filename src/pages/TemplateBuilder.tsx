@@ -373,14 +373,15 @@ const TemplateBuilder = () => {
         </aside>
 
         {/* Canvas */}
-        <div className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
+        <div ref={containerRef} className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
           <div
             ref={canvasRef}
             onClick={handleCanvasClick}
-            className="relative bg-background border border-border shadow-lg"
+            className="relative bg-background border border-border shadow-lg origin-center"
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
+              transform: `scale(${canvasScale})`,
               backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
               backgroundSize: "cover",
               backgroundPosition: "center",
