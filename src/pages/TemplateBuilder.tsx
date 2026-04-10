@@ -393,6 +393,7 @@ const TemplateBuilder = () => {
                 src={logoUrl}
                 alt="Logo"
                 onMouseDown={(e) => handleMouseDown("logo", e)}
+                onTouchStart={(e) => handleMouseDown("logo", e)}
                 className={`absolute h-12 object-contain cursor-move select-none ${
                   selectedAsset === "logo" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
