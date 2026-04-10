@@ -74,19 +74,21 @@ const TemplateBuilder = () => {
   const [canvasScale, setCanvasScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scale canvas to fit container
+  // Auto-scale canvas to fit container using ResizeObserver
   useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const updateScale = () => {
-      if (!containerRef.current) return;
-      const { clientWidth, clientHeight } = containerRef.current;
-      const pad = 48; // padding
+      const { clientWidth, clientHeight } = el;
+      const pad = 48;
       const scaleX = (clientWidth - pad) / CANVAS_WIDTH;
       const scaleY = (clientHeight - pad) / CANVAS_HEIGHT;
       setCanvasScale(Math.min(1, scaleX, scaleY));
     };
     updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
+    const ro = new ResizeObserver(updateScale);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
@@ -137,9 +139,10 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseDown = (target: DragTarget, e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerDown = (target: DragTarget, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(target);
     if (target === "logo" || target === "signature" || target === "seal") {
       setSelectedAsset(target);
@@ -179,34 +182,26 @@ const TemplateBuilder = () => {
     }
   }, [dragging, getCanvasPercent]);
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    applyDrag(e.clientX, e.clientY);
-  }, [applyDrag]);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
+  const handlePointerMove = useCallback((e: PointerEvent) => {
+    if (!dragging) return;
     e.preventDefault();
-    const touch = e.touches[0];
-    applyDrag(touch.clientX, touch.clientY);
-  }, [applyDrag]);
+    applyDrag(e.clientX, e.clientY);
+  }, [dragging, applyDrag]);
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback(() => {
     setDragging(null);
   }, []);
 
   useEffect(() => {
     if (dragging) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-      window.addEventListener("touchmove", handleTouchMove, { passive: false });
-      window.addEventListener("touchend", handleMouseUp);
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
       return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
-        window.removeEventListener("touchmove", handleTouchMove);
-        window.removeEventListener("touchend", handleMouseUp);
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
       };
     }
-  }, [dragging, handleMouseMove, handleMouseUp, handleTouchMove]);
+  }, [dragging, handlePointerMove, handlePointerUp]);
 
   const addField = () => {
     const newField: FieldItem = {
@@ -234,9 +229,12 @@ const TemplateBuilder = () => {
     setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   };
 
-  const handleCanvasClick = () => {
-    setSelectedField(null);
-    setSelectedAsset(null);
+  const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    // Only deselect when clicking directly on the canvas background
+    if (e.target === e.currentTarget) {
+      setSelectedField(null);
+      setSelectedAsset(null);
+    }
   };
 
   const handleSave = async () => {
