@@ -71,6 +71,23 @@ const TemplateBuilder = () => {
 
   const CANVAS_WIDTH = 842;
   const CANVAS_HEIGHT = 595;
+  const [canvasScale, setCanvasScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scale canvas to fit container
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const { clientWidth, clientHeight } = containerRef.current;
+      const pad = 48; // padding
+      const scaleX = (clientWidth - pad) / CANVAS_WIDTH;
+      const scaleY = (clientHeight - pad) / CANVAS_HEIGHT;
+      setCanvasScale(Math.min(1, scaleX, scaleY));
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -120,7 +137,7 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseDown = (target: DragTarget, e: React.MouseEvent) => {
+  const handleMouseDown = (target: DragTarget, e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragging(target);
@@ -133,31 +150,44 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!dragging || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      const clampX = Math.max(0, Math.min(100, x));
-      const clampY = Math.max(0, Math.min(100, y));
+  const getCanvasPercent = useCallback((clientX: number, clientY: number) => {
+    if (!canvasRef.current) return { x: 50, y: 50 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    };
+  }, []);
 
-      if (dragging === "logo") {
-        setLogoPos({ x: clampX, y: clampY });
-      } else if (dragging === "signature") {
-        setSignaturePos({ x: clampX, y: clampY });
-      } else if (dragging === "seal") {
-        setSealPos({ x: clampX, y: clampY });
-      } else {
-        setFields((prev) =>
-          prev.map((f) =>
-            f.id === dragging ? { ...f, xPosition: clampX, yPosition: clampY } : f
-          )
-        );
-      }
-    },
-    [dragging]
-  );
+  const applyDrag = useCallback((clientX: number, clientY: number) => {
+    if (!dragging) return;
+    const { x: clampX, y: clampY } = getCanvasPercent(clientX, clientY);
+    if (dragging === "logo") {
+      setLogoPos({ x: clampX, y: clampY });
+    } else if (dragging === "signature") {
+      setSignaturePos({ x: clampX, y: clampY });
+    } else if (dragging === "seal") {
+      setSealPos({ x: clampX, y: clampY });
+    } else {
+      setFields((prev) =>
+        prev.map((f) =>
+          f.id === dragging ? { ...f, xPosition: clampX, yPosition: clampY } : f
+        )
+      );
+    }
+  }, [dragging, getCanvasPercent]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    applyDrag(e.clientX, e.clientY);
+  }, [applyDrag]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    applyDrag(touch.clientX, touch.clientY);
+  }, [applyDrag]);
 
   const handleMouseUp = useCallback(() => {
     setDragging(null);
@@ -167,12 +197,16 @@ const TemplateBuilder = () => {
     if (dragging) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleMouseUp);
       return () => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("touchmove", handleTouchMove);
+        window.removeEventListener("touchend", handleMouseUp);
       };
     }
-  }, [dragging, handleMouseMove, handleMouseUp]);
+  }, [dragging, handleMouseMove, handleMouseUp, handleTouchMove]);
 
   const addField = () => {
     const newField: FieldItem = {
@@ -285,7 +319,7 @@ const TemplateBuilder = () => {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - uploads */}
-        <aside className="w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
+        <aside className="hidden md:block w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assets</h3>
 
           {[
@@ -339,14 +373,15 @@ const TemplateBuilder = () => {
         </aside>
 
         {/* Canvas */}
-        <div className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
+        <div ref={containerRef} className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
           <div
             ref={canvasRef}
             onClick={handleCanvasClick}
-            className="relative bg-background border border-border shadow-lg"
+            className="relative bg-background border border-border shadow-lg origin-center"
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
+              transform: `scale(${canvasScale})`,
               backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
               backgroundSize: "cover",
               backgroundPosition: "center",
@@ -358,6 +393,7 @@ const TemplateBuilder = () => {
                 src={logoUrl}
                 alt="Logo"
                 onMouseDown={(e) => handleMouseDown("logo", e)}
+                onTouchStart={(e) => handleMouseDown("logo", e)}
                 className={`absolute h-12 object-contain cursor-move select-none ${
                   selectedAsset === "logo" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
@@ -375,6 +411,7 @@ const TemplateBuilder = () => {
                 src={signatureUrl}
                 alt="Signature"
                 onMouseDown={(e) => handleMouseDown("signature", e)}
+                onTouchStart={(e) => handleMouseDown("signature", e)}
                 className={`absolute h-10 object-contain cursor-move select-none ${
                   selectedAsset === "signature" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
@@ -392,6 +429,7 @@ const TemplateBuilder = () => {
                 src={sealUrl}
                 alt="Seal"
                 onMouseDown={(e) => handleMouseDown("seal", e)}
+                onTouchStart={(e) => handleMouseDown("seal", e)}
                 className={`absolute h-16 object-contain cursor-move select-none ${
                   selectedAsset === "seal" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
@@ -408,6 +446,7 @@ const TemplateBuilder = () => {
               <div
                 key={field.id}
                 onMouseDown={(e) => handleMouseDown(field.id, e)}
+                onTouchStart={(e) => handleMouseDown(field.id, e)}
                 className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow ${
                   selectedField === field.id
                     ? "ring-2 ring-accent ring-offset-1 shadow-md"
