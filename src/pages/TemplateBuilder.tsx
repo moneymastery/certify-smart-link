@@ -68,6 +68,7 @@ const TemplateBuilder = () => {
   const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
   const [saving, setSaving] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const childClickedRef = useRef(false);
 
   const CANVAS_WIDTH = 842;
   const CANVAS_HEIGHT = 595;
