@@ -509,6 +509,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
           </div>
         )}
 
+        {step === "configure" && (
           <div className="space-y-6">
             <div>
               <h2 className="font-heading text-2xl font-bold text-foreground">Configure Batch</h2>
