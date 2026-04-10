@@ -137,7 +137,7 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseDown = (target: DragTarget, e: React.MouseEvent) => {
+  const handleMouseDown = (target: DragTarget, e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragging(target);
