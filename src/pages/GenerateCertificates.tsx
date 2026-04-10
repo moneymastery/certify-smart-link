@@ -129,6 +129,8 @@ const GenerateCertificates = () => {
     init();
   }, [user]);
 
+  const [templateFields, setTemplateFields] = useState<{ field_key: string; label: string }[]>([]);
+
   const handleDataParsed = (headers: string[], rows: Record<string, string>[]) => {
     setCsvHeaders(headers);
     setCsvRows(rows);
@@ -143,14 +145,36 @@ const GenerateCertificates = () => {
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
-    // Pre-select all non-email fields for verification display
     const preSelected = headers.filter(
       (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
     );
     setVerificationFields(preSelected);
 
-    setStep("configure");
+    setStep("mapping");
   };
+
+  // Load template fields when template changes
+  useEffect(() => {
+    if (!templateId) return;
+    const loadFields = async () => {
+      const { data } = await supabase
+        .from("template_fields")
+        .select("field_key, label")
+        .eq("template_id", templateId)
+        .order("sort_order");
+      setTemplateFields(data || []);
+      // Auto-map by matching field_key to CSV header
+      if (data && csvHeaders.length > 0) {
+        const autoMap: Record<string, string> = {};
+        for (const f of data) {
+          const match = csvHeaders.find((h) => h.toLowerCase() === f.field_key.toLowerCase());
+          if (match) autoMap[f.field_key] = match;
+        }
+        setFieldMapping(autoMap);
+      }
+    };
+    loadFields();
+  }, [templateId, csvHeaders]);
 
   const handleGenerate = async () => {
     if (setupLoading) {
