@@ -648,7 +648,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep("upload")}>
+              <Button variant="outline" onClick={() => setStep("mapping")}>
                 Back
               </Button>
               <Button
