@@ -49,7 +49,7 @@ const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
   { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", textAlign: "center", maxWidth: 300 },
 ];
 
-type DragTarget = string | "logo" | "signature" | "seal";
+type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
 
 const TemplateBuilder = () => {
   const { user } = useAuth();

@@ -293,7 +293,8 @@ export const generateCertificatePDF = async (
     const orgX = (orgXPct / 100) * config.width;
     const orgY = config.height - (orgYPct / 100) * config.height;
     page.drawText(config.organizationName, { x: orgX, y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
-    if (!assets?.signatureUrl) {
+    // Only draw "Authorized Signatory" line on default (no background) templates
+    if (!assets?.signatureUrl && !assets?.backgroundUrl) {
       page.drawLine({ start: { x: orgX, y: orgY + 15 }, end: { x: orgX + fontBold.widthOfTextAtSize(config.organizationName, 10), y: orgY + 15 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
       page.drawText("Authorized Signatory", { x: orgX, y: orgY + 22, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
     }
