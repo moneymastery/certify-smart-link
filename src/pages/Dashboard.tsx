@@ -313,6 +313,7 @@ const Dashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card">
         <div className="h-16 flex items-center gap-2 px-6 border-b border-border">
           <ShieldCheck className="h-5 w-5 text-accent" />
           <span className="font-heading text-lg font-semibold text-foreground">CertifyPro</span>
