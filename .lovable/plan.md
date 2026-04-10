@@ -1,46 +1,47 @@
 
-Goal: stabilize the template editor on `/templates/new` so fields/assets stay selected, the right settings panel stays visible while editing, and repositioning works reliably.
 
-What I found
-- The bug is in `src/pages/TemplateBuilder.tsx`.
-- A field/asset is selected on `onMouseDown` / `onTouchStart`, but the parent canvas `onClick` still fires afterward and clears `selectedField` / `selectedAsset`.
-- Because the right sidebar only renders when something is selected, it flashes open and then disappears.
-- That mount/unmount also changes the editor layout width, which makes the canvas feel unstable while trying to drag or edit.
-- The logs you pasted are from a browser extension, not from the app itself.
+## Root Cause Analysis
 
-Implementation plan
-1. Fix selection handling
-   - Replace the mixed mouse/touch selection flow with a single pointer-based flow.
-   - Stop event propagation from draggable fields/assets.
-   - Only clear selection when the user clicks the empty canvas background, not when clicking an item.
+Looking at the generated certificate vs what you designed in the template builder, there are several issues causing the messy output:
 
-2. Keep the right sidebar persistent
-   - Always render the sidebar shell instead of conditionally mounting/unmounting it.
-   - Show:
-     - field controls when a field is selected
-     - asset controls when an asset is selected
-     - a neutral “Select an item to edit” state when nothing is selected
-   - Reserve the sidebar width so the canvas no longer jumps.
+### Problem 1: Extra CSV columns get auto-positioned on top of each other
+When you upload a CSV with columns that aren't saved as template fields (like S/O, D/O, Roll No, Session, Reg No, etc.), the code auto-creates them starting at Y=60% with only 5% vertical spacing. They all pile up in the middle of the certificate, overlapping your background image's existing text.
 
-3. Make canvas scaling react to layout changes
-   - Replace the current `window.resize`-only scaling update with a `ResizeObserver` on the canvas container.
-   - This keeps the preview correctly scaled when the sidebar state changes or the viewport changes.
+### Problem 2: Hardcoded elements ignore your background
+The QR code is always placed at bottom-right (fixed pixel position), the Certificate ID always at bottom-center, and the Organization name at bottom-left. These clash with your background image's own footer design (logos, signatures area).
 
-4. Harden dragging/editing
-   - Prevent accidental deselection during drag.
-   - Keep coordinate clamping consistent.
-   - Preserve the existing field controls (X/Y, font size, color, alignment, max width) so they update the selected field reliably.
+### Problem 3: Fixed asset sizes
+Logo is always 50px tall, signature 40px, seal 60px. These don't scale to match your background's layout.
 
-5. Verify from user POV
-   - Click a field: sidebar stays open.
-   - Change X/Y/font settings: field updates immediately.
-   - Drag fields/assets multiple times: no flicker, no disappearing panel.
-   - Click blank canvas: selection clears intentionally.
-   - Recheck at the current tablet width and a smaller mobile width.
+### Problem 4: No field-to-CSV column mapping
+There's no UI to map which CSV column feeds which template field. The system just dumps all CSV columns as text onto the certificate.
 
-Files to update
-- `src/pages/TemplateBuilder.tsx`
+---
 
-Technical note
-- No backend/database changes are needed for this fix.
-- If you also want true asset resizing/fit controls to be saved into generated PDFs, that is a separate follow-up because asset size is not currently persisted in the template data or PDF generator.
+### Plan
+
+**1. Add CSV-to-field mapping UI in GenerateCertificates**
+- After CSV upload, show a mapping step where each template field can be linked to a CSV column
+- Only mapped fields get rendered; unmapped CSV columns are stored as data but not drawn on the PDF
+- This prevents the "extra fields" from being auto-positioned randomly
+
+**2. Make QR code, Certificate ID, and Org name positions configurable**
+- Add toggle options in the template builder: "Show QR code", "Show Certificate ID", "Show Org name"
+- Add position controls (or make them draggable like other assets)
+- Save these settings to the template so the PDF generator respects them
+
+**3. Add asset size controls in the template builder**
+- Allow width/height adjustment for logo, signature, and seal
+- Save sizes to the database and use them in the PDF generator
+- This requires adding `logo_width`, `logo_height`, `signature_width`, `signature_height`, `seal_width`, `seal_height` columns to the templates table
+
+**4. Remove the auto-generation of extra fields**
+- Delete the `extraFields` logic in GenerateCertificates.tsx (lines 228-239)
+- Only use fields explicitly defined in the template
+
+**Files to change:**
+- `src/pages/GenerateCertificates.tsx` — add field mapping UI, remove auto-extra-fields
+- `src/pages/TemplateBuilder.tsx` — add asset size controls, QR/ID/Org toggles
+- `src/lib/certificate-generator.ts` — respect new size settings and toggle flags
+- 1 database migration — add asset size columns and toggle columns to templates table
+
