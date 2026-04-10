@@ -370,24 +370,24 @@ const GenerateCertificates = () => {
 
       <main className="container mx-auto max-w-5xl px-6 py-10">
         <div className="flex items-center gap-2 mb-10">
-          {(["upload", "configure", "generating", "complete"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                step === s
-                  ? "bg-primary text-primary-foreground"
-                  : ["upload", "configure", "generating", "complete"].indexOf(step) > i
-                  ? "bg-accent text-accent-foreground"
-                  : "bg-muted text-muted-foreground"
-              }`}>
-                {["upload", "configure", "generating", "complete"].indexOf(step) > i ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  i + 1
-                )}
+          {(["upload", "mapping", "configure", "generating", "complete"] as Step[]).map((s, i) => {
+            const allSteps: Step[] = ["upload", "mapping", "configure", "generating", "complete"];
+            const currentIdx = allSteps.indexOf(step);
+            return (
+              <div key={s} className="flex items-center gap-2">
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                  step === s
+                    ? "bg-primary text-primary-foreground"
+                    : currentIdx > i
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}>
+                  {currentIdx > i ? <CheckCircle className="h-4 w-4" /> : i + 1}
+                </div>
+                {i < 4 && <div className="w-10 h-px bg-border" />}
               </div>
-              {i < 3 && <div className="w-12 h-px bg-border" />}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {step === "upload" && (
