@@ -71,6 +71,23 @@ const TemplateBuilder = () => {
 
   const CANVAS_WIDTH = 842;
   const CANVAS_HEIGHT = 595;
+  const [canvasScale, setCanvasScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scale canvas to fit container
+  useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current) return;
+      const { clientWidth, clientHeight } = containerRef.current;
+      const pad = 48; // padding
+      const scaleX = (clientWidth - pad) / CANVAS_WIDTH;
+      const scaleY = (clientHeight - pad) / CANVAS_HEIGHT;
+      setCanvasScale(Math.min(1, scaleX, scaleY));
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
