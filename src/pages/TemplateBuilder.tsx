@@ -150,31 +150,44 @@ const TemplateBuilder = () => {
     }
   };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!dragging || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      const clampX = Math.max(0, Math.min(100, x));
-      const clampY = Math.max(0, Math.min(100, y));
+  const getCanvasPercent = useCallback((clientX: number, clientY: number) => {
+    if (!canvasRef.current) return { x: 50, y: 50 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    };
+  }, []);
 
-      if (dragging === "logo") {
-        setLogoPos({ x: clampX, y: clampY });
-      } else if (dragging === "signature") {
-        setSignaturePos({ x: clampX, y: clampY });
-      } else if (dragging === "seal") {
-        setSealPos({ x: clampX, y: clampY });
-      } else {
-        setFields((prev) =>
-          prev.map((f) =>
-            f.id === dragging ? { ...f, xPosition: clampX, yPosition: clampY } : f
-          )
-        );
-      }
-    },
-    [dragging]
-  );
+  const applyDrag = useCallback((clientX: number, clientY: number) => {
+    if (!dragging) return;
+    const { x: clampX, y: clampY } = getCanvasPercent(clientX, clientY);
+    if (dragging === "logo") {
+      setLogoPos({ x: clampX, y: clampY });
+    } else if (dragging === "signature") {
+      setSignaturePos({ x: clampX, y: clampY });
+    } else if (dragging === "seal") {
+      setSealPos({ x: clampX, y: clampY });
+    } else {
+      setFields((prev) =>
+        prev.map((f) =>
+          f.id === dragging ? { ...f, xPosition: clampX, yPosition: clampY } : f
+        )
+      );
+    }
+  }, [dragging, getCanvasPercent]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    applyDrag(e.clientX, e.clientY);
+  }, [applyDrag]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    applyDrag(touch.clientX, touch.clientY);
+  }, [applyDrag]);
 
   const handleMouseUp = useCallback(() => {
     setDragging(null);
