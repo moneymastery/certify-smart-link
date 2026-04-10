@@ -410,7 +410,105 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
           </div>
         )}
 
-        {step === "configure" && (
+        {step === "mapping" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-heading text-2xl font-bold text-foreground">Map Fields</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Link each template field to a column from your uploaded file. Only mapped fields will appear on the certificate.
+              </p>
+            </div>
+
+            {templates.length > 0 && (
+              <div className="space-y-2">
+                <Label>Certificate Template</Label>
+                <select
+                  value={templateId || ""}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name Column *</Label>
+                <select
+                  value={nameColumn}
+                  onChange={(e) => setNameColumn(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select column...</option>
+                  {csvHeaders.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Email Column (optional)</Label>
+                <select
+                  value={emailColumn}
+                  onChange={(e) => setEmailColumn(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">None</option>
+                  {csvHeaders.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {templateFields.length > 0 && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Template Field → CSV Column</Label>
+                <p className="text-xs text-muted-foreground">
+                  Map each template field to the CSV column that contains its data. Leave unmapped to skip.
+                </p>
+                <div className="space-y-2">
+                  {templateFields
+                    .filter((f) => f.field_key !== "recipient_name")
+                    .map((f) => (
+                    <div key={f.field_key} className="flex items-center gap-3">
+                      <span className="text-sm text-foreground w-40 truncate">{f.label}</span>
+                      <span className="text-muted-foreground text-xs">→</span>
+                      <select
+                        value={fieldMapping[f.field_key] || ""}
+                        onChange={(e) =>
+                          setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                        }
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">— Skip —</option>
+                        {csvHeaders.map((h) => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {templateFields.length === 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                No custom fields found in the selected template. All CSV columns will be stored as data but only the recipient name will be rendered on the certificate.
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep("upload")}>Back</Button>
+              <Button variant="hero" onClick={() => setStep("configure")} disabled={!nameColumn}>
+                Continue to Configure
+              </Button>
+            </div>
+          </div>
+        )}
+
           <div className="space-y-6">
             <div>
               <h2 className="font-heading text-2xl font-bold text-foreground">Configure Batch</h2>
