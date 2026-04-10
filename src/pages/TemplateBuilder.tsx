@@ -143,6 +143,7 @@ const TemplateBuilder = () => {
   const handlePointerDown = (target: DragTarget, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    childClickedRef.current = true;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(target);
     if (target === "logo" || target === "signature" || target === "seal") {
