@@ -555,6 +555,60 @@ const TemplateBuilder = () => {
               />
             )}
 
+            {/* QR Code placeholder — draggable */}
+            {showQrCode && (
+              <div
+                onPointerDown={(e) => handlePointerDown("qrCode", e)}
+                className={`absolute cursor-move select-none touch-none flex flex-col items-center ${
+                  selectedAsset === "qrCode" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${qrCodePos.x}%`,
+                  top: `${qrCodePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div className="w-14 h-14 border-2 border-dashed border-muted-foreground/60 bg-background/50 rounded flex items-center justify-center">
+                  <span className="text-[9px] text-muted-foreground font-medium">QR</span>
+                </div>
+                <span className="text-[7px] text-muted-foreground mt-0.5">Scan to verify</span>
+              </div>
+            )}
+
+            {/* Certificate ID placeholder — draggable */}
+            {showCertificateId && (
+              <div
+                onPointerDown={(e) => handlePointerDown("certId", e)}
+                className={`absolute cursor-move select-none touch-none px-2 py-0.5 rounded ${
+                  selectedAsset === "certId" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${certIdPos.x}%`,
+                  top: `${certIdPos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span className="text-[9px] text-muted-foreground">Certificate ID: CERT-XXXXXX</span>
+              </div>
+            )}
+
+            {/* Organization Name placeholder — draggable */}
+            {showOrgName && (
+              <div
+                onPointerDown={(e) => handlePointerDown("orgName", e)}
+                className={`absolute cursor-move select-none touch-none px-2 py-0.5 rounded ${
+                  selectedAsset === "orgName" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${orgNamePos.x}%`,
+                  top: `${orgNamePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span className="text-[10px] font-bold text-foreground/70">Org Name</span>
+              </div>
+            )}
+
             {/* Draggable fields */}
             {fields.map((field) => (
               <div
