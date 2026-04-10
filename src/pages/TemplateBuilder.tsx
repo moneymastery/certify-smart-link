@@ -131,6 +131,58 @@ const TemplateBuilder = () => {
     getOrg();
   }, [user]);
 
+  // Load existing template for edit mode
+  useEffect(() => {
+    if (!editId || !user) return;
+    const loadTemplate = async () => {
+      setLoading(true);
+      try {
+        const [tmplRes, fieldsRes] = await Promise.all([
+          supabase.from("templates").select("*").eq("id", editId).single(),
+          supabase.from("template_fields").select("*").eq("template_id", editId).order("sort_order"),
+        ]);
+        const t = tmplRes.data as any;
+        if (!t) { toast({ title: "Template not found", variant: "destructive" }); navigate("/dashboard"); return; }
+        setOrgId(t.organization_id);
+        setTemplateName(t.name);
+        setBackgroundUrl(t.background_url);
+        setLogoUrl(t.logo_url);
+        setSignatureUrl(t.signature_url);
+        setSealUrl(t.seal_url);
+        setLogoPos({ x: Number(t.logo_x), y: Number(t.logo_y) });
+        setSignaturePos({ x: Number(t.signature_x), y: Number(t.signature_y) });
+        setSealPos({ x: Number(t.seal_x), y: Number(t.seal_y) });
+        setLogoSize({ width: t.logo_width ?? 0, height: t.logo_height ?? 50 });
+        setSignatureSize({ width: t.signature_width ?? 0, height: t.signature_height ?? 40 });
+        setSealSize({ width: t.seal_width ?? 0, height: t.seal_height ?? 60 });
+        setShowQrCode(t.show_qr_code !== false);
+        setShowCertificateId(t.show_certificate_id !== false);
+        setShowOrgName(t.show_org_name !== false);
+        setQrCodePos({ x: Number(t.qr_code_x ?? 90), y: Number(t.qr_code_y ?? 90) });
+        setCertIdPos({ x: Number(t.cert_id_x ?? 50), y: Number(t.cert_id_y ?? 90) });
+        setOrgNamePos({ x: Number(t.org_name_x ?? 10), y: Number(t.org_name_y ?? 90) });
+
+        const loadedFields = (fieldsRes.data || []).map((f: any) => ({
+          id: f.id,
+          fieldKey: f.field_key,
+          label: f.label,
+          xPosition: Number(f.x_position),
+          yPosition: Number(f.y_position),
+          fontSize: f.font_size,
+          fontColor: f.font_color,
+          textAlign: f.text_align,
+          maxWidth: f.max_width,
+        }));
+        if (loadedFields.length > 0) setFields(loadedFields);
+      } catch (err: any) {
+        toast({ title: "Failed to load template", description: err.message, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTemplate();
+  }, [editId, user]);
+
   const uploadFile = async (file: File, bucket: string, path: string): Promise<string | null> => {
     const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
     if (error) {
