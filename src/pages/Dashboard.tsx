@@ -49,16 +49,28 @@ const Dashboard = () => {
   const [stats, setStats] = useState({ templates: 0, certificates: 0, verifications: 0, batches: 0 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
 
   // Search
   const [certSearch, setCertSearch] = useState("");
   const [batchSearch, setBatchSearch] = useState("");
+  const [templateSearch, setTemplateSearch] = useState("");
 
   // Delete batch dialog
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [deleteBatchName, setDeleteBatchName] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  // Delete template dialog
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [deleteTemplateName, setDeleteTemplateName] = useState("");
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
+
+  // Rename template
+  const [renameTemplateId, setRenameTemplateId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   // Re-download
   const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
