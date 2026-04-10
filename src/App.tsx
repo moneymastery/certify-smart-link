@@ -28,6 +28,7 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/generate" element={<ProtectedRoute><GenerateCertificates /></ProtectedRoute>} />
             <Route path="/templates/new" element={<ProtectedRoute><TemplateBuilder /></ProtectedRoute>} />
+            <Route path="/templates/:id/edit" element={<ProtectedRoute><TemplateBuilder /></ProtectedRoute>} />
             <Route path="/verify" element={<Verify />} />
             <Route path="/verify/:id" element={<Verify />} />
             <Route path="/login" element={<Login />} />
