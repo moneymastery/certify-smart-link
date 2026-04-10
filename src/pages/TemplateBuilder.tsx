@@ -49,7 +49,7 @@ const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
   { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", textAlign: "center", maxWidth: 300 },
 ];
 
-type DragTarget = string | "logo" | "signature" | "seal";
+type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
 
 const TemplateBuilder = () => {
   const { user } = useAuth();
@@ -84,7 +84,7 @@ const TemplateBuilder = () => {
   );
   const [dragging, setDragging] = useState<DragTarget | null>(null);
   const [selectedField, setSelectedField] = useState<string | null>(null);
-  const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName" | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -218,8 +218,8 @@ const TemplateBuilder = () => {
     childClickedRef.current = true;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(target);
-    if (target === "logo" || target === "signature" || target === "seal") {
-      setSelectedAsset(target);
+    if (target === "logo" || target === "signature" || target === "seal" || target === "qrCode" || target === "certId" || target === "orgName") {
+      setSelectedAsset(target as any);
       setSelectedField(null);
     } else {
       setSelectedField(target);
@@ -247,6 +247,12 @@ const TemplateBuilder = () => {
       setSignaturePos({ x: clampX, y: clampY });
     } else if (dragging === "seal") {
       setSealPos({ x: clampX, y: clampY });
+    } else if (dragging === "qrCode") {
+      setQrCodePos({ x: clampX, y: clampY });
+    } else if (dragging === "certId") {
+      setCertIdPos({ x: clampX, y: clampY });
+    } else if (dragging === "orgName") {
+      setOrgNamePos({ x: clampX, y: clampY });
     } else {
       setFields((prev) =>
         prev.map((f) =>
@@ -549,6 +555,60 @@ const TemplateBuilder = () => {
               />
             )}
 
+            {/* QR Code placeholder — draggable */}
+            {showQrCode && (
+              <div
+                onPointerDown={(e) => handlePointerDown("qrCode", e)}
+                className={`absolute cursor-move select-none touch-none flex flex-col items-center ${
+                  selectedAsset === "qrCode" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${qrCodePos.x}%`,
+                  top: `${qrCodePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div className="w-14 h-14 border-2 border-dashed border-muted-foreground/60 bg-background/50 rounded flex items-center justify-center">
+                  <span className="text-[9px] text-muted-foreground font-medium">QR</span>
+                </div>
+                <span className="text-[7px] text-muted-foreground mt-0.5">Scan to verify</span>
+              </div>
+            )}
+
+            {/* Certificate ID placeholder — draggable */}
+            {showCertificateId && (
+              <div
+                onPointerDown={(e) => handlePointerDown("certId", e)}
+                className={`absolute cursor-move select-none touch-none px-2 py-0.5 rounded ${
+                  selectedAsset === "certId" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${certIdPos.x}%`,
+                  top: `${certIdPos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span className="text-[9px] text-muted-foreground">Certificate ID: CERT-XXXXXX</span>
+              </div>
+            )}
+
+            {/* Organization Name placeholder — draggable */}
+            {showOrgName && (
+              <div
+                onPointerDown={(e) => handlePointerDown("orgName", e)}
+                className={`absolute cursor-move select-none touch-none px-2 py-0.5 rounded ${
+                  selectedAsset === "orgName" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
+                }`}
+                style={{
+                  left: `${orgNamePos.x}%`,
+                  top: `${orgNamePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span className="text-[10px] font-bold text-foreground/70">Org Name</span>
+              </div>
+            )}
+
             {/* Draggable fields */}
             {fields.map((field) => (
               <div
@@ -588,14 +648,25 @@ const TemplateBuilder = () => {
         {/* Right sidebar - always visible */}
         <aside className="hidden md:block w-72 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
           {selectedAsset && (() => {
-            const posState = selectedAsset === "logo" ? logoPos : selectedAsset === "signature" ? signaturePos : sealPos;
-            const setPos = selectedAsset === "logo" ? setLogoPos : selectedAsset === "signature" ? setSignaturePos : setSealPos;
+            // Image assets (logo, signature, seal) have size controls
+            const isImageAsset = selectedAsset === "logo" || selectedAsset === "signature" || selectedAsset === "seal";
+            // System elements (qrCode, certId, orgName) only have position
+            const posMap: Record<string, [AssetPosition, React.Dispatch<React.SetStateAction<AssetPosition>>]> = {
+              logo: [logoPos, setLogoPos],
+              signature: [signaturePos, setSignaturePos],
+              seal: [sealPos, setSealPos],
+              qrCode: [qrCodePos, setQrCodePos],
+              certId: [certIdPos, setCertIdPos],
+              orgName: [orgNamePos, setOrgNamePos],
+            };
+            const [posState, setPos] = posMap[selectedAsset] || [{ x: 50, y: 50 }, () => {}];
             const sizeState = selectedAsset === "logo" ? logoSize : selectedAsset === "signature" ? signatureSize : sealSize;
             const setSize = selectedAsset === "logo" ? setLogoSize : selectedAsset === "signature" ? setSignatureSize : setSealSize;
+            const labelMap: Record<string, string> = { logo: "Logo", signature: "Signature", seal: "Seal", qrCode: "QR Code", certId: "Certificate ID", orgName: "Organization Name" };
             return (
               <>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Properties
+                  {labelMap[selectedAsset]} Properties
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
@@ -607,17 +678,21 @@ const TemplateBuilder = () => {
                     <Input type="number" value={Math.round(posState.y)} onChange={(e) => setPos((p) => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-sm" min={0} max={100} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Width (px)</Label>
-                    <Input type="number" value={sizeState.width || ""} onChange={(e) => setSize((s) => ({ ...s, width: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Height (px)</Label>
-                    <Input type="number" value={sizeState.height || ""} onChange={(e) => setSize((s) => ({ ...s, height: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">Set 0 or empty for auto-sizing.</p>
+                {isImageAsset && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Width (px)</Label>
+                        <Input type="number" value={sizeState.width || ""} onChange={(e) => setSize((s) => ({ ...s, width: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Height (px)</Label>
+                        <Input type="number" value={sizeState.height || ""} onChange={(e) => setSize((s) => ({ ...s, height: Number(e.target.value) }))} className="h-8 text-sm" placeholder="Auto" min={0} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Set 0 or empty for auto-sizing.</p>
+                  </>
+                )}
               </>
             );
           })()}
