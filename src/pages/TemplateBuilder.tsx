@@ -429,6 +429,7 @@ const TemplateBuilder = () => {
                 src={sealUrl}
                 alt="Seal"
                 onMouseDown={(e) => handleMouseDown("seal", e)}
+                onTouchStart={(e) => handleMouseDown("seal", e)}
                 className={`absolute h-16 object-contain cursor-move select-none ${
                   selectedAsset === "seal" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
