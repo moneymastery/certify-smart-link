@@ -218,8 +218,8 @@ const TemplateBuilder = () => {
     childClickedRef.current = true;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(target);
-    if (target === "logo" || target === "signature" || target === "seal") {
-      setSelectedAsset(target);
+    if (target === "logo" || target === "signature" || target === "seal" || target === "qrCode" || target === "certId" || target === "orgName") {
+      setSelectedAsset(target as any);
       setSelectedField(null);
     } else {
       setSelectedField(target);
