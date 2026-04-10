@@ -320,48 +320,64 @@ const TemplateBuilder = () => {
     if (!user || !orgId) return;
     setSaving(true);
 
-    try {
-      const { data: template, error: tmplErr } = await supabase
-        .from("templates")
-        .insert({
-          organization_id: orgId,
-          name: templateName,
-          created_by: user.id,
-          width_px: CANVAS_WIDTH,
-          height_px: CANVAS_HEIGHT,
-          background_url: backgroundUrl,
-          logo_url: logoUrl,
-          signature_url: signatureUrl,
-          seal_url: sealUrl,
-          logo_x: logoPos.x,
-          logo_y: logoPos.y,
-          signature_x: signaturePos.x,
-          signature_y: signaturePos.y,
-          seal_x: sealPos.x,
-          seal_y: sealPos.y,
-          logo_width: logoSize.width,
-          logo_height: logoSize.height,
-          signature_width: signatureSize.width,
-          signature_height: signatureSize.height,
-          seal_width: sealSize.width,
-          seal_height: sealSize.height,
-          show_qr_code: showQrCode,
-          show_certificate_id: showCertificateId,
-          show_org_name: showOrgName,
-          qr_code_x: qrCodePos.x,
-          qr_code_y: qrCodePos.y,
-          cert_id_x: certIdPos.x,
-          cert_id_y: certIdPos.y,
-          org_name_x: orgNamePos.x,
-          org_name_y: orgNamePos.y,
-        } as any)
-        .select("id")
-        .single();
+    const templatePayload = {
+      name: templateName,
+      width_px: CANVAS_WIDTH,
+      height_px: CANVAS_HEIGHT,
+      background_url: backgroundUrl,
+      logo_url: logoUrl,
+      signature_url: signatureUrl,
+      seal_url: sealUrl,
+      logo_x: logoPos.x,
+      logo_y: logoPos.y,
+      signature_x: signaturePos.x,
+      signature_y: signaturePos.y,
+      seal_x: sealPos.x,
+      seal_y: sealPos.y,
+      logo_width: logoSize.width,
+      logo_height: logoSize.height,
+      signature_width: signatureSize.width,
+      signature_height: signatureSize.height,
+      seal_width: sealSize.width,
+      seal_height: sealSize.height,
+      show_qr_code: showQrCode,
+      show_certificate_id: showCertificateId,
+      show_org_name: showOrgName,
+      qr_code_x: qrCodePos.x,
+      qr_code_y: qrCodePos.y,
+      cert_id_x: certIdPos.x,
+      cert_id_y: certIdPos.y,
+      org_name_x: orgNamePos.x,
+      org_name_y: orgNamePos.y,
+    } as any;
 
-      if (tmplErr) throw tmplErr;
+    try {
+      let templateId: string;
+
+      if (isEditMode && editId) {
+        // Update existing template
+        const { error: tmplErr } = await supabase
+          .from("templates")
+          .update(templatePayload)
+          .eq("id", editId);
+        if (tmplErr) throw tmplErr;
+        templateId = editId;
+
+        // Delete old fields and re-insert
+        await supabase.from("template_fields").delete().eq("template_id", editId);
+      } else {
+        // Create new template
+        const { data: template, error: tmplErr } = await supabase
+          .from("templates")
+          .insert({ ...templatePayload, organization_id: orgId, created_by: user.id })
+          .select("id")
+          .single();
+        if (tmplErr) throw tmplErr;
+        templateId = template.id;
+      }
 
       const fieldRows = fields.map((f, i) => ({
-        template_id: template.id,
+        template_id: templateId,
         field_key: f.fieldKey,
         label: f.label,
         x_position: f.xPosition,
@@ -376,7 +392,7 @@ const TemplateBuilder = () => {
       const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows);
       if (fieldsErr) throw fieldsErr;
 
-      toast({ title: "Template saved!", description: "Your certificate template has been created." });
+      toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
       navigate("/dashboard");
     } catch (error: any) {
       toast({ title: "Error saving template", description: error.message, variant: "destructive" });
