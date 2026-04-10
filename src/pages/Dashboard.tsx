@@ -17,6 +17,7 @@ import {
   Trash2,
   Search,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ import JSZip from "jszip";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Overview" },
+  { icon: Palette, label: "Templates" },
   { icon: FileText, label: "Certificates" },
   { icon: BarChart3, label: "Batches" },
 ];
