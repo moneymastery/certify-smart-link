@@ -232,44 +232,44 @@ const GenerateCertificates = () => {
       return;
     }
 
-    const batchRows = csvRows.map((row) => ({
-      recipientName: row[nameColumn] || "Unknown",
-      recipientEmail: emailColumn ? row[emailColumn] : undefined,
-      recipientData: row,
-    }));
+    // Build recipientData using field mapping so only mapped fields get values
+    const batchRows = csvRows.map((row) => {
+      const mappedData: Record<string, string> = {};
+      for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
+        if (csvCol && row[csvCol]) {
+          mappedData[fieldKey] = row[csvCol];
+        }
+      }
+      // Also keep all raw CSV data for recipient_data storage
+      return {
+        recipientName: row[nameColumn] || "Unknown",
+        recipientEmail: emailColumn ? row[emailColumn] : undefined,
+        recipientData: { ...row, ...mappedData },
+      };
+    });
 
-    const savedFieldKeys = new Set(tmplFields.map((f: any) => f.field_key));
-    const mappedFields = tmplFields.map((f: any) => ({
-      fieldKey: f.field_key,
-      label: f.label,
-      xPosition: Number(f.x_position),
-      yPosition: Number(f.y_position),
-      fontSize: f.font_size,
-      fontColor: f.font_color,
-      textAlign: f.text_align as "left" | "center" | "right",
-      maxWidth: f.max_width ?? undefined,
-    }));
-
-    const extraFields = csvHeaders
-      .filter((h) => h !== nameColumn && h !== emailColumn && !savedFieldKeys.has(h))
-      .map((h, i) => ({
-        fieldKey: h,
-        label: h.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        xPosition: 50,
-        yPosition: 60 + i * 5,
-        fontSize: 12,
-        fontColor: "#333333",
-        textAlign: "center" as const,
-        maxWidth: undefined,
+    // Only use fields that have a mapping assigned
+    const mappedFields = tmplFields
+      .filter((f: any) => fieldMapping[f.field_key])
+      .map((f: any) => ({
+        fieldKey: f.field_key,
+        label: f.label,
+        xPosition: Number(f.x_position),
+        yPosition: Number(f.y_position),
+        fontSize: f.font_size,
+        fontColor: f.font_color,
+        textAlign: f.text_align as "left" | "center" | "right",
+        maxWidth: f.max_width ?? undefined,
       }));
 
+    const td = tmplData as any;
     const config = {
       templateName: tmplData?.name || "Default Template",
       organizationName: orgName,
       width: tmplData?.width_px || 842,
       height: tmplData?.height_px || 595,
       issueDate: issueDate.toISOString(),
-      fields: [...mappedFields, ...extraFields],
+      fields: mappedFields,
       assets: {
         backgroundUrl: tmplData?.background_url,
         logoUrl: tmplData?.logo_url,
@@ -281,6 +281,23 @@ const GenerateCertificates = () => {
         signatureY: tmplData?.signature_y != null ? Number(tmplData.signature_y) : undefined,
         sealX: tmplData?.seal_x != null ? Number(tmplData.seal_x) : undefined,
         sealY: tmplData?.seal_y != null ? Number(tmplData.seal_y) : undefined,
+        logoWidth: td?.logo_width != null ? Number(td.logo_width) : undefined,
+        logoHeight: td?.logo_height != null ? Number(td.logo_height) : undefined,
+        signatureWidth: td?.signature_width != null ? Number(td.signature_width) : undefined,
+        signatureHeight: td?.signature_height != null ? Number(td.signature_height) : undefined,
+        sealWidth: td?.seal_width != null ? Number(td.seal_width) : undefined,
+        sealHeight: td?.seal_height != null ? Number(td.seal_height) : undefined,
+      },
+      displayToggles: {
+        showQrCode: td?.show_qr_code !== false,
+        showCertificateId: td?.show_certificate_id !== false,
+        showOrgName: td?.show_org_name !== false,
+        qrCodeX: td?.qr_code_x != null ? Number(td.qr_code_x) : undefined,
+        qrCodeY: td?.qr_code_y != null ? Number(td.qr_code_y) : undefined,
+        certIdX: td?.cert_id_x != null ? Number(td.cert_id_x) : undefined,
+        certIdY: td?.cert_id_y != null ? Number(td.cert_id_y) : undefined,
+        orgNameX: td?.org_name_x != null ? Number(td.org_name_x) : undefined,
+        orgNameY: td?.org_name_y != null ? Number(td.org_name_y) : undefined,
       },
     };
 
