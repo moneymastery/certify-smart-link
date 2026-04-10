@@ -25,7 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
-type Step = "upload" | "configure" | "generating" | "complete";
+type Step = "upload" | "mapping" | "configure" | "generating" | "complete";
 
 type GeneratedCertificate = {
   serialNumber: string;
@@ -37,6 +37,7 @@ type GeneratedCertificate = {
 const GenerateCertificates = () => {
   const { user } = useAuth();
   const [step, setStep] = useState<Step>("upload");
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvRows, setCsvRows] = useState<Record<string, string>[]>([]);
   const [batchName, setBatchName] = useState("");
