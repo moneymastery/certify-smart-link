@@ -1,62 +1,46 @@
 
+Goal: stabilize the template editor on `/templates/new` so fields/assets stay selected, the right settings panel stays visible while editing, and repositioning works reliably.
 
-## Ship-Readiness Audit: Issues Found
+What I found
+- The bug is in `src/pages/TemplateBuilder.tsx`.
+- A field/asset is selected on `onMouseDown` / `onTouchStart`, but the parent canvas `onClick` still fires afterward and clears `selectedField` / `selectedAsset`.
+- Because the right sidebar only renders when something is selected, it flashes open and then disappears.
+- That mount/unmount also changes the editor layout width, which makes the canvas feel unstable while trying to drag or edit.
+- The logs you pasted are from a browser extension, not from the app itself.
 
-### Issues to Fix
+Implementation plan
+1. Fix selection handling
+   - Replace the mixed mouse/touch selection flow with a single pointer-based flow.
+   - Stop event propagation from draggable fields/assets.
+   - Only clear selection when the user clicks the empty canvas background, not when clicking an item.
 
-**1. Navbar links to `#pricing` but no Pricing section exists**
-The nav (desktop + mobile) links to `#pricing` — clicking it does nothing. Either add a Pricing section or remove the link.
+2. Keep the right sidebar persistent
+   - Always render the sidebar shell instead of conditionally mounting/unmounting it.
+   - Show:
+     - field controls when a field is selected
+     - asset controls when an asset is selected
+     - a neutral “Select an item to edit” state when nothing is selected
+   - Reserve the sidebar width so the canvas no longer jumps.
 
-**2. "Generate C..." button text clipped on mobile dashboard**
-The top-right "Generate Certificates" button is cut off on mobile (390px). Needs shorter label on small screens (e.g., "Generate" or icon-only).
+3. Make canvas scaling react to layout changes
+   - Replace the current `window.resize`-only scaling update with a `ResizeObserver` on the canvas container.
+   - This keeps the preview correctly scaled when the sidebar state changes or the viewport changes.
 
-**3. Console error: `certificate_verifications` insert returns 403**
-The RLS policy on `certificate_verifications` blocks anonymous inserts. Verification logging silently fails for unauthenticated QR scanners. Need an `INSERT` policy allowing `anon` role.
+4. Harden dragging/editing
+   - Prevent accidental deselection during drag.
+   - Keep coordinate clamping consistent.
+   - Preserve the existing field controls (X/Y, font size, color, alignment, max width) so they update the selected field reliably.
 
-**4. Console warning: VerifiedCard ref error**
-React warns "Function components cannot be given refs" for `VerifiedCard`. Harmless but sloppy — needs `forwardRef` or the ref should be removed.
+5. Verify from user POV
+   - Click a field: sidebar stays open.
+   - Change X/Y/font settings: field updates immediately.
+   - Drag fields/assets multiple times: no flicker, no disappearing panel.
+   - Click blank canvas: selection clears intentionally.
+   - Recheck at the current tablet width and a smaller mobile width.
 
-**5. Dashboard has no sidebar on mobile**
-On 390px the sidebar tabs (Overview, Certificates, Batches) are not visible. Users are stuck on the Overview tab with no way to switch. Need a mobile tab bar or horizontal scroll tabs.
+Files to update
+- `src/pages/TemplateBuilder.tsx`
 
-**6. Footer is too minimal**
-Only shows logo + copyright. For E-E-A-T and professionalism, should include links to Verify, Privacy Policy, Terms, and contact info.
-
-**7. No `/reset-password` route exists**
-Login page sends password reset emails pointing to `/reset-password`, but no route handles it — users will see 404.
-
-**8. Demo video/PPTX are binary placeholders**
-The files `CertifyPro-Demo.mp4` and `CertifyPro-Overview.pptx` were created as binary blobs. The video likely won't play and the PPTX may be corrupt. These download buttons in "How It Works" could embarrass you.
-
-**9. No `<meta>` or Open Graph tags for `/verify` route**
-The verify page (the most shared page via QR) has no page-specific title or OG tags. Scanned links shared on social media will show generic info.
-
-### Recommended Fixes (Priority Order)
-
-| # | Issue | Severity | Fix |
-|---|-------|----------|-----|
-| 1 | Mobile dashboard sidebar missing | High | Add horizontal tab bar for mobile |
-| 2 | `#pricing` link dead | Medium | Remove from nav or add section |
-| 3 | "Generate C..." clipped | Medium | Responsive button text |
-| 4 | 403 on verification logging | Medium | Add anon INSERT RLS policy |
-| 5 | `/reset-password` 404 | Medium | Add route + page |
-| 6 | VerifiedCard ref warning | Low | Remove ref or add forwardRef |
-| 7 | Demo video/PPTX may be broken | Medium | Remove download buttons or regenerate properly |
-| 8 | Footer too minimal | Low | Add useful links |
-| 9 | Verify page missing OG tags | Low | Add Helmet to Verify page |
-
-### What's Working Well
-
-- Homepage: Hero, Stats, Features, How It Works, Trust Signals, Testimonials, FAQ all render correctly on mobile
-- Verification flow: QR scan -> auto-lookup -> white-labeled result with org name works perfectly
-- Login/Signup: Form, forgot password, toggle all functional
-- Dashboard: Stats cards, certificate list, search input all present
-- Certificate generation: Step wizard with CSV upload, field config, date picker all in place
-- Template builder: Draggable fields and assets functional
-
-### Plan
-
-Fix all 9 issues above. The critical ones are: mobile dashboard navigation, dead pricing link, clipped button, and the 403 RLS error. The video/PPTX buttons should be removed since the files are likely corrupt placeholders.
-
-**Files to change:** `Dashboard.tsx`, `Navbar.tsx`, `Footer.tsx`, `Verify.tsx`, `HowItWorks.tsx`, `App.tsx` (add reset-password route), 1 migration for RLS policy, new `ResetPassword.tsx` page.
-
+Technical note
+- No backend/database changes are needed for this fix.
+- If you also want true asset resizing/fit controls to be saved into generated PDFs, that is a separate follow-up because asset size is not currently persisted in the template data or PDF generator.
