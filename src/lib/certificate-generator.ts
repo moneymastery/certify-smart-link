@@ -20,6 +20,24 @@ export interface TemplateAssets {
   signatureY?: number;
   sealX?: number;
   sealY?: number;
+  logoWidth?: number;
+  logoHeight?: number;
+  signatureWidth?: number;
+  signatureHeight?: number;
+  sealWidth?: number;
+  sealHeight?: number;
+}
+
+export interface DisplayToggles {
+  showQrCode?: boolean;
+  showCertificateId?: boolean;
+  showOrgName?: boolean;
+  qrCodeX?: number;
+  qrCodeY?: number;
+  certIdX?: number;
+  certIdY?: number;
+  orgNameX?: number;
+  orgNameY?: number;
 }
 
 export interface GenerationConfig {
@@ -39,6 +57,7 @@ export interface GenerationConfig {
     maxWidth?: number;
   }[];
   assets?: TemplateAssets;
+  displayToggles?: DisplayToggles;
 }
 
 const hexToRgb = (hex: string) => {
