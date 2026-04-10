@@ -142,6 +142,10 @@ const Dashboard = () => {
     ? batches.filter((b) => b.name.toLowerCase().includes(batchSearch.toLowerCase()))
     : batches;
 
+  const filteredTemplates = templateSearch
+    ? templates.filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase()))
+    : templates;
+
   // Delete batch
   const handleDeleteBatch = async () => {
     if (!deleteBatchId) return;
