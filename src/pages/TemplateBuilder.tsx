@@ -418,9 +418,9 @@ const TemplateBuilder = () => {
               className="border-none bg-transparent font-heading text-lg font-semibold h-auto p-0 focus-visible:ring-0 w-64"
             />
           </div>
-          <Button variant="hero" size="sm" onClick={handleSave} disabled={saving}>
+          <Button variant="hero" size="sm" onClick={handleSave} disabled={saving || loading}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Template
+            {isEditMode ? "Update Template" : "Save Template"}
           </Button>
         </div>
       </header>
