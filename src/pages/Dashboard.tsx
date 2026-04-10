@@ -551,6 +551,65 @@ const Dashboard = () => {
               )}
             </>
           )}
+
+          {/* Templates tab */}
+          {activeItem === "Templates" && (
+            <>
+              {templates.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-16 text-center">
+                  <Palette className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+                  <h3 className="font-heading text-lg font-semibold text-foreground">No templates yet</h3>
+                  <Button variant="hero" className="mt-6" asChild>
+                    <Link to="/templates/new">Create First Template</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="bg-muted px-4 py-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-foreground">Templates</span>
+                    <div className="relative w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates..." className="h-8 pl-8 text-xs" />
+                    </div>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {filteredTemplates.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">No matching templates found.</div>
+                    ) : (
+                      filteredTemplates.map((tmpl) => (
+                        <div key={tmpl.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                          <div className="min-w-0 flex items-center gap-3">
+                            {tmpl.background_url ? (
+                              <img src={tmpl.background_url} alt="" className="h-10 w-14 object-cover rounded border border-border" />
+                            ) : (
+                              <div className="h-10 w-14 rounded border border-border bg-muted flex items-center justify-center">
+                                <Palette className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-foreground truncate">{tmpl.name}</p>
+                              <p className="text-xs text-muted-foreground">{new Date(tmpl.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Edit template">
+                              <Link to={`/templates/${tmpl.id}/edit`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Rename" onClick={() => { setRenameTemplateId(tmpl.id); setRenameValue(tmpl.name); }}>
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete" onClick={() => { setDeleteTemplateId(tmpl.id); setDeleteTemplateName(tmpl.name); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )
         </div>
       </main>
     </div>
