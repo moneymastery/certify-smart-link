@@ -119,6 +119,13 @@ const Dashboard = () => {
       .order("created_at", { ascending: false })
       .limit(50);
     if (batchData) setBatches(batchData);
+
+    const { data: tmplData } = await supabase
+      .from("templates")
+      .select("id, name, created_at, background_url")
+      .eq("organization_id", oid)
+      .order("created_at", { ascending: false });
+    if (tmplData) setTemplates(tmplData);
   };
 
   useEffect(() => { loadData(); }, [user]);
