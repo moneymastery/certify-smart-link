@@ -446,6 +446,7 @@ const TemplateBuilder = () => {
               <div
                 key={field.id}
                 onMouseDown={(e) => handleMouseDown(field.id, e)}
+                onTouchStart={(e) => handleMouseDown(field.id, e)}
                 className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow ${
                   selectedField === field.id
                     ? "ring-2 ring-accent ring-offset-1 shadow-md"
