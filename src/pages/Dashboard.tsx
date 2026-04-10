@@ -17,6 +17,7 @@ import {
   Trash2,
   Search,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ import JSZip from "jszip";
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Overview" },
+  { icon: Palette, label: "Templates" },
   { icon: FileText, label: "Certificates" },
   { icon: BarChart3, label: "Batches" },
 ];
@@ -47,16 +49,28 @@ const Dashboard = () => {
   const [stats, setStats] = useState({ templates: 0, certificates: 0, verifications: 0, batches: 0 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
 
   // Search
   const [certSearch, setCertSearch] = useState("");
   const [batchSearch, setBatchSearch] = useState("");
+  const [templateSearch, setTemplateSearch] = useState("");
 
   // Delete batch dialog
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [deleteBatchName, setDeleteBatchName] = useState("");
   const [deleting, setDeleting] = useState(false);
+
+  // Delete template dialog
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [deleteTemplateName, setDeleteTemplateName] = useState("");
+  const [deletingTemplate, setDeletingTemplate] = useState(false);
+
+  // Rename template
+  const [renameTemplateId, setRenameTemplateId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   // Re-download
   const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
@@ -105,6 +119,13 @@ const Dashboard = () => {
       .order("created_at", { ascending: false })
       .limit(50);
     if (batchData) setBatches(batchData);
+
+    const { data: tmplData } = await supabase
+      .from("templates")
+      .select("id, name, created_at, background_url")
+      .eq("organization_id", oid)
+      .order("created_at", { ascending: false });
+    if (tmplData) setTemplates(tmplData);
   };
 
   useEffect(() => { loadData(); }, [user]);
@@ -120,6 +141,10 @@ const Dashboard = () => {
   const filteredBatches = batchSearch
     ? batches.filter((b) => b.name.toLowerCase().includes(batchSearch.toLowerCase()))
     : batches;
+
+  const filteredTemplates = templateSearch
+    ? templates.filter((t) => t.name.toLowerCase().includes(templateSearch.toLowerCase()))
+    : templates;
 
   // Delete batch
   const handleDeleteBatch = async () => {
@@ -188,6 +213,41 @@ const Dashboard = () => {
     }
   };
 
+  // Delete template
+  const handleDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    setDeletingTemplate(true);
+    try {
+      await supabase.from("template_fields").delete().eq("template_id", deleteTemplateId);
+      const { error } = await supabase.from("templates").delete().eq("id", deleteTemplateId);
+      if (error) throw error;
+      toast({ title: "Template deleted", description: `"${deleteTemplateName}" has been removed.` });
+      await loadData();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDeletingTemplate(false);
+      setDeleteTemplateId(null);
+    }
+  };
+
+  // Rename template
+  const handleRenameTemplate = async () => {
+    if (!renameTemplateId || !renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      const { error } = await supabase.from("templates").update({ name: renameValue.trim() } as any).eq("id", renameTemplateId);
+      if (error) throw error;
+      toast({ title: "Template renamed" });
+      await loadData();
+    } catch (err: any) {
+      toast({ title: "Rename failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRenaming(false);
+      setRenameTemplateId(null);
+    }
+  };
+
   const statCards = [
     { label: "Templates", value: stats.templates, icon: Upload },
     { label: "Certificates", value: stats.certificates, icon: Award },
@@ -215,6 +275,39 @@ const Dashboard = () => {
             >
               {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete template dialog */}
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => { if (!open) setDeleteTemplateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete template "{deleteTemplateName}"?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete this template and its fields. Existing certificates are not affected.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingTemplate}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTemplate} disabled={deletingTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deletingTemplate ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename template dialog */}
+      <AlertDialog open={!!renameTemplateId} onOpenChange={(open) => { if (!open) setRenameTemplateId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rename template</AlertDialogTitle>
+            <AlertDialogDescription>Enter a new name for this template.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="Template name" className="mt-2" />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={renaming}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRenameTemplate} disabled={renaming || !renameValue.trim()}>
+              {renaming ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Rename
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -447,6 +540,65 @@ const Dashboard = () => {
                               onClick={() => { setDeleteBatchId(batch.id); setDeleteBatchName(batch.name); }}
                               title="Delete batch"
                             >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Templates tab */}
+          {activeItem === "Templates" && (
+            <>
+              {templates.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-muted/30 p-16 text-center">
+                  <Palette className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+                  <h3 className="font-heading text-lg font-semibold text-foreground">No templates yet</h3>
+                  <Button variant="hero" className="mt-6" asChild>
+                    <Link to="/templates/new">Create First Template</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="bg-muted px-4 py-3 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-foreground">Templates</span>
+                    <div className="relative w-64">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates..." className="h-8 pl-8 text-xs" />
+                    </div>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {filteredTemplates.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground">No matching templates found.</div>
+                    ) : (
+                      filteredTemplates.map((tmpl) => (
+                        <div key={tmpl.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                          <div className="min-w-0 flex items-center gap-3">
+                            {tmpl.background_url ? (
+                              <img src={tmpl.background_url} alt="" className="h-10 w-14 object-cover rounded border border-border" />
+                            ) : (
+                              <div className="h-10 w-14 rounded border border-border bg-muted flex items-center justify-center">
+                                <Palette className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-sm font-medium text-foreground truncate">{tmpl.name}</p>
+                              <p className="text-xs text-muted-foreground">{new Date(tmpl.created_at).toLocaleDateString()}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild title="Edit template">
+                              <Link to={`/templates/${tmpl.id}/edit`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Rename" onClick={() => { setRenameTemplateId(tmpl.id); setRenameValue(tmpl.name); }}>
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete" onClick={() => { setDeleteTemplateId(tmpl.id); setDeleteTemplateName(tmpl.name); }}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>

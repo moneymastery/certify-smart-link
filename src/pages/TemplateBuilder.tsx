@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ShieldCheck,
   ArrowLeft,
@@ -54,6 +54,8 @@ type DragTarget = string | "logo" | "signature" | "seal";
 const TemplateBuilder = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { id: editId } = useParams<{ id: string }>();
+  const isEditMode = !!editId;
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const [templateName, setTemplateName] = useState("My Certificate Template");
@@ -84,6 +86,7 @@ const TemplateBuilder = () => {
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
   const childClickedRef = useRef(false);
 
@@ -127,6 +130,58 @@ const TemplateBuilder = () => {
     };
     getOrg();
   }, [user]);
+
+  // Load existing template for edit mode
+  useEffect(() => {
+    if (!editId || !user) return;
+    const loadTemplate = async () => {
+      setLoading(true);
+      try {
+        const [tmplRes, fieldsRes] = await Promise.all([
+          supabase.from("templates").select("*").eq("id", editId).single(),
+          supabase.from("template_fields").select("*").eq("template_id", editId).order("sort_order"),
+        ]);
+        const t = tmplRes.data as any;
+        if (!t) { toast({ title: "Template not found", variant: "destructive" }); navigate("/dashboard"); return; }
+        setOrgId(t.organization_id);
+        setTemplateName(t.name);
+        setBackgroundUrl(t.background_url);
+        setLogoUrl(t.logo_url);
+        setSignatureUrl(t.signature_url);
+        setSealUrl(t.seal_url);
+        setLogoPos({ x: Number(t.logo_x), y: Number(t.logo_y) });
+        setSignaturePos({ x: Number(t.signature_x), y: Number(t.signature_y) });
+        setSealPos({ x: Number(t.seal_x), y: Number(t.seal_y) });
+        setLogoSize({ width: t.logo_width ?? 0, height: t.logo_height ?? 50 });
+        setSignatureSize({ width: t.signature_width ?? 0, height: t.signature_height ?? 40 });
+        setSealSize({ width: t.seal_width ?? 0, height: t.seal_height ?? 60 });
+        setShowQrCode(t.show_qr_code !== false);
+        setShowCertificateId(t.show_certificate_id !== false);
+        setShowOrgName(t.show_org_name !== false);
+        setQrCodePos({ x: Number(t.qr_code_x ?? 90), y: Number(t.qr_code_y ?? 90) });
+        setCertIdPos({ x: Number(t.cert_id_x ?? 50), y: Number(t.cert_id_y ?? 90) });
+        setOrgNamePos({ x: Number(t.org_name_x ?? 10), y: Number(t.org_name_y ?? 90) });
+
+        const loadedFields = (fieldsRes.data || []).map((f: any) => ({
+          id: f.id,
+          fieldKey: f.field_key,
+          label: f.label,
+          xPosition: Number(f.x_position),
+          yPosition: Number(f.y_position),
+          fontSize: f.font_size,
+          fontColor: f.font_color,
+          textAlign: f.text_align,
+          maxWidth: f.max_width,
+        }));
+        if (loadedFields.length > 0) setFields(loadedFields);
+      } catch (err: any) {
+        toast({ title: "Failed to load template", description: err.message, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTemplate();
+  }, [editId, user]);
 
   const uploadFile = async (file: File, bucket: string, path: string): Promise<string | null> => {
     const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
@@ -265,48 +320,64 @@ const TemplateBuilder = () => {
     if (!user || !orgId) return;
     setSaving(true);
 
-    try {
-      const { data: template, error: tmplErr } = await supabase
-        .from("templates")
-        .insert({
-          organization_id: orgId,
-          name: templateName,
-          created_by: user.id,
-          width_px: CANVAS_WIDTH,
-          height_px: CANVAS_HEIGHT,
-          background_url: backgroundUrl,
-          logo_url: logoUrl,
-          signature_url: signatureUrl,
-          seal_url: sealUrl,
-          logo_x: logoPos.x,
-          logo_y: logoPos.y,
-          signature_x: signaturePos.x,
-          signature_y: signaturePos.y,
-          seal_x: sealPos.x,
-          seal_y: sealPos.y,
-          logo_width: logoSize.width,
-          logo_height: logoSize.height,
-          signature_width: signatureSize.width,
-          signature_height: signatureSize.height,
-          seal_width: sealSize.width,
-          seal_height: sealSize.height,
-          show_qr_code: showQrCode,
-          show_certificate_id: showCertificateId,
-          show_org_name: showOrgName,
-          qr_code_x: qrCodePos.x,
-          qr_code_y: qrCodePos.y,
-          cert_id_x: certIdPos.x,
-          cert_id_y: certIdPos.y,
-          org_name_x: orgNamePos.x,
-          org_name_y: orgNamePos.y,
-        } as any)
-        .select("id")
-        .single();
+    const templatePayload = {
+      name: templateName,
+      width_px: CANVAS_WIDTH,
+      height_px: CANVAS_HEIGHT,
+      background_url: backgroundUrl,
+      logo_url: logoUrl,
+      signature_url: signatureUrl,
+      seal_url: sealUrl,
+      logo_x: logoPos.x,
+      logo_y: logoPos.y,
+      signature_x: signaturePos.x,
+      signature_y: signaturePos.y,
+      seal_x: sealPos.x,
+      seal_y: sealPos.y,
+      logo_width: logoSize.width,
+      logo_height: logoSize.height,
+      signature_width: signatureSize.width,
+      signature_height: signatureSize.height,
+      seal_width: sealSize.width,
+      seal_height: sealSize.height,
+      show_qr_code: showQrCode,
+      show_certificate_id: showCertificateId,
+      show_org_name: showOrgName,
+      qr_code_x: qrCodePos.x,
+      qr_code_y: qrCodePos.y,
+      cert_id_x: certIdPos.x,
+      cert_id_y: certIdPos.y,
+      org_name_x: orgNamePos.x,
+      org_name_y: orgNamePos.y,
+    } as any;
 
-      if (tmplErr) throw tmplErr;
+    try {
+      let templateId: string;
+
+      if (isEditMode && editId) {
+        // Update existing template
+        const { error: tmplErr } = await supabase
+          .from("templates")
+          .update(templatePayload)
+          .eq("id", editId);
+        if (tmplErr) throw tmplErr;
+        templateId = editId;
+
+        // Delete old fields and re-insert
+        await supabase.from("template_fields").delete().eq("template_id", editId);
+      } else {
+        // Create new template
+        const { data: template, error: tmplErr } = await supabase
+          .from("templates")
+          .insert({ ...templatePayload, organization_id: orgId, created_by: user.id })
+          .select("id")
+          .single();
+        if (tmplErr) throw tmplErr;
+        templateId = template.id;
+      }
 
       const fieldRows = fields.map((f, i) => ({
-        template_id: template.id,
+        template_id: templateId,
         field_key: f.fieldKey,
         label: f.label,
         x_position: f.xPosition,
@@ -321,7 +392,7 @@ const TemplateBuilder = () => {
       const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows);
       if (fieldsErr) throw fieldsErr;
 
-      toast({ title: "Template saved!", description: "Your certificate template has been created." });
+      toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
       navigate("/dashboard");
     } catch (error: any) {
       toast({ title: "Error saving template", description: error.message, variant: "destructive" });
@@ -347,9 +418,9 @@ const TemplateBuilder = () => {
               className="border-none bg-transparent font-heading text-lg font-semibold h-auto p-0 focus-visible:ring-0 w-64"
             />
           </div>
-          <Button variant="hero" size="sm" onClick={handleSave} disabled={saving}>
+          <Button variant="hero" size="sm" onClick={handleSave} disabled={saving || loading}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Template
+            {isEditMode ? "Update Template" : "Save Template"}
           </Button>
         </div>
       </header>
