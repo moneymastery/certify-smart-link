@@ -374,8 +374,8 @@ const TemplateBuilder = () => {
         <div ref={containerRef} className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
           <div
             ref={canvasRef}
-            onClick={handleCanvasClick}
-            className="relative bg-background border border-border shadow-lg origin-center"
+            onPointerDown={handleCanvasPointerDown}
+            className="relative bg-background border border-border shadow-lg origin-center touch-none"
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
@@ -390,9 +390,8 @@ const TemplateBuilder = () => {
               <img
                 src={logoUrl}
                 alt="Logo"
-                onMouseDown={(e) => handleMouseDown("logo", e)}
-                onTouchStart={(e) => handleMouseDown("logo", e)}
-                className={`absolute h-12 object-contain cursor-move select-none ${
+                onPointerDown={(e) => handlePointerDown("logo", e)}
+                className={`absolute h-12 object-contain cursor-move select-none touch-none ${
                   selectedAsset === "logo" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
                 style={{
@@ -400,6 +399,7 @@ const TemplateBuilder = () => {
                   top: `${logoPos.y}%`,
                   transform: "translate(-50%, -50%)",
                 }}
+                draggable={false}
               />
             )}
 
@@ -408,9 +408,8 @@ const TemplateBuilder = () => {
               <img
                 src={signatureUrl}
                 alt="Signature"
-                onMouseDown={(e) => handleMouseDown("signature", e)}
-                onTouchStart={(e) => handleMouseDown("signature", e)}
-                className={`absolute h-10 object-contain cursor-move select-none ${
+                onPointerDown={(e) => handlePointerDown("signature", e)}
+                className={`absolute h-10 object-contain cursor-move select-none touch-none ${
                   selectedAsset === "signature" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
                 style={{
@@ -418,6 +417,7 @@ const TemplateBuilder = () => {
                   top: `${signaturePos.y}%`,
                   transform: "translate(-50%, -50%)",
                 }}
+                draggable={false}
               />
             )}
 
@@ -426,9 +426,8 @@ const TemplateBuilder = () => {
               <img
                 src={sealUrl}
                 alt="Seal"
-                onMouseDown={(e) => handleMouseDown("seal", e)}
-                onTouchStart={(e) => handleMouseDown("seal", e)}
-                className={`absolute h-16 object-contain cursor-move select-none ${
+                onPointerDown={(e) => handlePointerDown("seal", e)}
+                className={`absolute h-16 object-contain cursor-move select-none touch-none ${
                   selectedAsset === "seal" ? "ring-2 ring-accent ring-offset-1" : "hover:ring-1 hover:ring-border"
                 }`}
                 style={{
@@ -436,6 +435,7 @@ const TemplateBuilder = () => {
                   top: `${sealPos.y}%`,
                   transform: "translate(-50%, -50%)",
                 }}
+                draggable={false}
               />
             )}
 
@@ -443,9 +443,8 @@ const TemplateBuilder = () => {
             {fields.map((field) => (
               <div
                 key={field.id}
-                onMouseDown={(e) => handleMouseDown(field.id, e)}
-                onTouchStart={(e) => handleMouseDown(field.id, e)}
-                className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow ${
+                onPointerDown={(e) => handlePointerDown(field.id, e)}
+                className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow touch-none ${
                   selectedField === field.id
                     ? "ring-2 ring-accent ring-offset-1 shadow-md"
                     : "hover:ring-1 hover:ring-border"
@@ -466,7 +465,7 @@ const TemplateBuilder = () => {
 
             {/* Empty state */}
             {!backgroundUrl && fields.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center text-muted-foreground">
                   <Image className="h-12 w-12 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">Upload a background image to start</p>
@@ -476,28 +475,90 @@ const TemplateBuilder = () => {
           </div>
         </div>
 
-        {/* Right sidebar - field/asset properties */}
-        {(selectedFieldData || selectedAsset) && (
-          <aside className="w-64 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
-            {selectedAsset && (
-              <>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Position
-                </h3>
+        {/* Right sidebar - always visible */}
+        <aside className="hidden md:block w-64 border-l border-border bg-card p-4 space-y-4 overflow-y-auto shrink-0">
+          {selectedAsset && (
+            <>
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {selectedAsset === "logo" ? "Logo" : selectedAsset === "signature" ? "Signature" : "Seal"} Position
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">X (%)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round(
+                      selectedAsset === "logo" ? logoPos.x : selectedAsset === "signature" ? signaturePos.x : sealPos.x
+                    )}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, x: v }));
+                      else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, x: v }));
+                      else setSealPos((p) => ({ ...p, x: v }));
+                    }}
+                    className="h-8 text-sm"
+                    min={0}
+                    max={100}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Y (%)</Label>
+                  <Input
+                    type="number"
+                    value={Math.round(
+                      selectedAsset === "logo" ? logoPos.y : selectedAsset === "signature" ? signaturePos.y : sealPos.y
+                    )}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, y: v }));
+                      else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, y: v }));
+                      else setSealPos((p) => ({ ...p, y: v }));
+                    }}
+                    className="h-8 text-sm"
+                    min={0}
+                    max={100}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Drag the asset on the canvas or type exact coordinates.</p>
+            </>
+          )}
+
+          {selectedFieldData && (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field Properties</h3>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeField(selectedFieldData.id)}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Label</Label>
+                  <Input
+                    value={selectedFieldData.label}
+                    onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Field Key (CSV column)</Label>
+                  <Input
+                    value={selectedFieldData.fieldKey}
+                    onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })}
+                    className="h-8 text-sm font-mono"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">X (%)</Label>
                     <Input
                       type="number"
-                      value={Math.round(
-                        selectedAsset === "logo" ? logoPos.x : selectedAsset === "signature" ? signaturePos.x : sealPos.x
-                      )}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, x: v }));
-                        else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, x: v }));
-                        else setSealPos((p) => ({ ...p, x: v }));
-                      }}
+                      value={Math.round(selectedFieldData.xPosition)}
+                      onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })}
                       className="h-8 text-sm"
                       min={0}
                       max={100}
@@ -507,143 +568,86 @@ const TemplateBuilder = () => {
                     <Label className="text-xs">Y (%)</Label>
                     <Input
                       type="number"
-                      value={Math.round(
-                        selectedAsset === "logo" ? logoPos.y : selectedAsset === "signature" ? signaturePos.y : sealPos.y
-                      )}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        if (selectedAsset === "logo") setLogoPos((p) => ({ ...p, y: v }));
-                        else if (selectedAsset === "signature") setSignaturePos((p) => ({ ...p, y: v }));
-                        else setSealPos((p) => ({ ...p, y: v }));
-                      }}
+                      value={Math.round(selectedFieldData.yPosition)}
+                      onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })}
                       className="h-8 text-sm"
                       min={0}
                       max={100}
                     />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Drag the asset on the canvas or type exact coordinates.</p>
-              </>
-            )}
 
-            {selectedFieldData && (
-              <>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field Properties</h3>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeField(selectedFieldData.id)}>
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
+                <div className="space-y-1">
+                  <Label className="text-xs">Font Size</Label>
+                  <Input
+                    type="number"
+                    value={selectedFieldData.fontSize}
+                    onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })}
+                    className="h-8 text-sm"
+                    min={8}
+                    max={72}
+                  />
                 </div>
 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Label</Label>
-                    <Input
-                      value={selectedFieldData.label}
-                      onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })}
-                      className="h-8 text-sm"
+                <div className="space-y-1">
+                  <Label className="text-xs">Color</Label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={selectedFieldData.fontColor}
+                      onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
+                      className="h-8 w-8 rounded border border-border cursor-pointer"
                     />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Field Key (CSV column)</Label>
                     <Input
-                      value={selectedFieldData.fieldKey}
-                      onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })}
-                      className="h-8 text-sm font-mono"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">X (%)</Label>
-                      <Input
-                        type="number"
-                        value={Math.round(selectedFieldData.xPosition)}
-                        onChange={(e) => updateField(selectedFieldData.id, { xPosition: Number(e.target.value) })}
-                        className="h-8 text-sm"
-                        min={0}
-                        max={100}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Y (%)</Label>
-                      <Input
-                        type="number"
-                        value={Math.round(selectedFieldData.yPosition)}
-                        onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })}
-                        className="h-8 text-sm"
-                        min={0}
-                        max={100}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Font Size</Label>
-                    <Input
-                      type="number"
-                      value={selectedFieldData.fontSize}
-                      onChange={(e) => updateField(selectedFieldData.id, { fontSize: Number(e.target.value) })}
-                      className="h-8 text-sm"
-                      min={8}
-                      max={72}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Color</Label>
-                    <div className="flex gap-2">
-                      <input
-                        type="color"
-                        value={selectedFieldData.fontColor}
-                        onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                        className="h-8 w-8 rounded border border-border cursor-pointer"
-                      />
-                      <Input
-                        value={selectedFieldData.fontColor}
-                        onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
-                        className="h-8 text-sm font-mono flex-1"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Align</Label>
-                    <div className="flex gap-1">
-                      {["left", "center", "right"].map((a) => (
-                        <Button
-                          key={a}
-                          variant={selectedFieldData.textAlign === a ? "default" : "outline"}
-                          size="sm"
-                          className="flex-1 h-7 text-xs capitalize"
-                          onClick={() => updateField(selectedFieldData.id, { textAlign: a })}
-                        >
-                          {a}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Max Width (px)</Label>
-                    <Input
-                      type="number"
-                      value={selectedFieldData.maxWidth || ""}
-                      onChange={(e) =>
-                        updateField(selectedFieldData.id, {
-                          maxWidth: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                      className="h-8 text-sm"
-                      placeholder="Auto"
+                      value={selectedFieldData.fontColor}
+                      onChange={(e) => updateField(selectedFieldData.id, { fontColor: e.target.value })}
+                      className="h-8 text-sm font-mono flex-1"
                     />
                   </div>
                 </div>
-              </>
-            )}
-          </aside>
-        )}
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Align</Label>
+                  <div className="flex gap-1">
+                    {["left", "center", "right"].map((a) => (
+                      <Button
+                        key={a}
+                        variant={selectedFieldData.textAlign === a ? "default" : "outline"}
+                        size="sm"
+                        className="flex-1 h-7 text-xs capitalize"
+                        onClick={() => updateField(selectedFieldData.id, { textAlign: a })}
+                      >
+                        {a}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Max Width (px)</Label>
+                  <Input
+                    type="number"
+                    value={selectedFieldData.maxWidth || ""}
+                    onChange={(e) =>
+                      updateField(selectedFieldData.id, {
+                        maxWidth: e.target.value ? Number(e.target.value) : null,
+                      })
+                    }
+                    className="h-8 text-sm"
+                    placeholder="Auto"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!selectedFieldData && !selectedAsset && (
+            <div className="flex flex-col items-center justify-center h-40 text-center text-muted-foreground">
+              <PenTool className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-sm">Select a field or asset on the canvas to edit its properties</p>
+            </div>
+          )}
+        </aside>
       </div>
     </div>
   );
