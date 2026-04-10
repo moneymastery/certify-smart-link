@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -35,6 +36,11 @@ interface FieldItem {
 interface AssetPosition {
   x: number;
   y: number;
+}
+
+interface AssetSize {
+  width: number;
+  height: number;
 }
 
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
@@ -59,6 +65,17 @@ const TemplateBuilder = () => {
   const [logoPos, setLogoPos] = useState<AssetPosition>({ x: 50, y: 5 });
   const [signaturePos, setSignaturePos] = useState<AssetPosition>({ x: 25, y: 85 });
   const [sealPos, setSealPos] = useState<AssetPosition>({ x: 80, y: 82 });
+
+  const [logoSize, setLogoSize] = useState<AssetSize>({ width: 0, height: 50 });
+  const [signatureSize, setSignatureSize] = useState<AssetSize>({ width: 0, height: 40 });
+  const [sealSize, setSealSize] = useState<AssetSize>({ width: 0, height: 60 });
+
+  const [showQrCode, setShowQrCode] = useState(true);
+  const [showCertificateId, setShowCertificateId] = useState(true);
+  const [showOrgName, setShowOrgName] = useState(true);
+  const [qrCodePos, setQrCodePos] = useState<AssetPosition>({ x: 90, y: 90 });
+  const [certIdPos, setCertIdPos] = useState<AssetPosition>({ x: 50, y: 90 });
+  const [orgNamePos, setOrgNamePos] = useState<AssetPosition>({ x: 10, y: 90 });
 
   const [fields, setFields] = useState<FieldItem[]>(
     DEFAULT_FIELDS.map((f, i) => ({ ...f, id: `field-${i}` }))
@@ -267,7 +284,22 @@ const TemplateBuilder = () => {
           signature_y: signaturePos.y,
           seal_x: sealPos.x,
           seal_y: sealPos.y,
-        })
+          logo_width: logoSize.width,
+          logo_height: logoSize.height,
+          signature_width: signatureSize.width,
+          signature_height: signatureSize.height,
+          seal_width: sealSize.width,
+          seal_height: sealSize.height,
+          show_qr_code: showQrCode,
+          show_certificate_id: showCertificateId,
+          show_org_name: showOrgName,
+          qr_code_x: qrCodePos.x,
+          qr_code_y: qrCodePos.y,
+          cert_id_x: certIdPos.x,
+          cert_id_y: certIdPos.y,
+          org_name_x: orgNamePos.x,
+          org_name_y: orgNamePos.y,
+        } as any)
         .select("id")
         .single();
 
