@@ -213,6 +213,41 @@ const Dashboard = () => {
     }
   };
 
+  // Delete template
+  const handleDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    setDeletingTemplate(true);
+    try {
+      await supabase.from("template_fields").delete().eq("template_id", deleteTemplateId);
+      const { error } = await supabase.from("templates").delete().eq("id", deleteTemplateId);
+      if (error) throw error;
+      toast({ title: "Template deleted", description: `"${deleteTemplateName}" has been removed.` });
+      await loadData();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDeletingTemplate(false);
+      setDeleteTemplateId(null);
+    }
+  };
+
+  // Rename template
+  const handleRenameTemplate = async () => {
+    if (!renameTemplateId || !renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      const { error } = await supabase.from("templates").update({ name: renameValue.trim() } as any).eq("id", renameTemplateId);
+      if (error) throw error;
+      toast({ title: "Template renamed" });
+      await loadData();
+    } catch (err: any) {
+      toast({ title: "Rename failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRenaming(false);
+      setRenameTemplateId(null);
+    }
+  };
+
   const statCards = [
     { label: "Templates", value: stats.templates, icon: Upload },
     { label: "Certificates", value: stats.certificates, icon: Award },
