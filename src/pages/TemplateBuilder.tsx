@@ -84,7 +84,7 @@ const TemplateBuilder = () => {
   );
   const [dragging, setDragging] = useState<DragTarget | null>(null);
   const [selectedField, setSelectedField] = useState<string | null>(null);
-  const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName" | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
