@@ -147,14 +147,14 @@ export const generateCertificatePDF = async (
     page.drawText(certifyText, { x: (config.width - certifyWidth) / 2, y: config.height - 200, size: 12, font, color: rgb(0.4, 0.4, 0.4) });
   }
 
-  // Logo — use saved position or defaults
+  // Logo — use saved position and size
   if (assets?.logoUrl) {
     const logoBytes = await fetchImageBytes(assets.logoUrl);
     if (logoBytes) {
       try {
         const logoImage = await embedImage(pdfDoc, logoBytes, assets.logoUrl);
-        const logoH = 50;
-        const logoW = (logoImage.width / logoImage.height) * logoH;
+        const logoH = assets.logoHeight && assets.logoHeight > 0 ? assets.logoHeight : 50;
+        const logoW = assets.logoWidth && assets.logoWidth > 0 ? assets.logoWidth : (logoImage.width / logoImage.height) * logoH;
         const lx = (assets.logoX ?? 50) / 100 * config.width - logoW / 2;
         const ly = config.height - (assets.logoY ?? 5) / 100 * config.height - logoH / 2;
         page.drawImage(logoImage, { x: lx, y: ly, width: logoW, height: logoH });
@@ -221,14 +221,14 @@ export const generateCertificatePDF = async (
     });
   }
 
-  // Signature — use saved position
+  // Signature — use saved position and size
   if (assets?.signatureUrl) {
     const sigBytes = await fetchImageBytes(assets.signatureUrl);
     if (sigBytes) {
       try {
         const sigImage = await embedImage(pdfDoc, sigBytes, assets.signatureUrl);
-        const sigH = 40;
-        const sigW = (sigImage.width / sigImage.height) * sigH;
+        const sigH = assets.signatureHeight && assets.signatureHeight > 0 ? assets.signatureHeight : 40;
+        const sigW = assets.signatureWidth && assets.signatureWidth > 0 ? assets.signatureWidth : (sigImage.width / sigImage.height) * sigH;
         const sx = (assets.signatureX ?? 25) / 100 * config.width - sigW / 2;
         const sy = config.height - (assets.signatureY ?? 85) / 100 * config.height - sigH / 2;
         page.drawImage(sigImage, { x: sx, y: sy, width: sigW, height: sigH });
@@ -236,14 +236,14 @@ export const generateCertificatePDF = async (
     }
   }
 
-  // Seal — use saved position
+  // Seal — use saved position and size
   if (assets?.sealUrl) {
     const sealBytes = await fetchImageBytes(assets.sealUrl);
     if (sealBytes) {
       try {
         const sealImage = await embedImage(pdfDoc, sealBytes, assets.sealUrl);
-        const sealH = 60;
-        const sealW = (sealImage.width / sealImage.height) * sealH;
+        const sealH = assets.sealHeight && assets.sealHeight > 0 ? assets.sealHeight : 60;
+        const sealW = assets.sealWidth && assets.sealWidth > 0 ? assets.sealWidth : (sealImage.width / sealImage.height) * sealH;
         const sx = (assets.sealX ?? 80) / 100 * config.width - sealW / 2;
         const sy = config.height - (assets.sealY ?? 82) / 100 * config.height - sealH / 2;
         page.drawImage(sealImage, { x: sx, y: sy, width: sealW, height: sealH });
