@@ -68,6 +68,7 @@ const TemplateBuilder = () => {
   const [selectedAsset, setSelectedAsset] = useState<"logo" | "signature" | "seal" | null>(null);
   const [saving, setSaving] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const childClickedRef = useRef(false);
 
   const CANVAS_WIDTH = 842;
   const CANVAS_HEIGHT = 595;
@@ -142,6 +143,7 @@ const TemplateBuilder = () => {
   const handlePointerDown = (target: DragTarget, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    childClickedRef.current = true;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(target);
     if (target === "logo" || target === "signature" || target === "seal") {
@@ -230,6 +232,11 @@ const TemplateBuilder = () => {
   };
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    // Guard: if a child element just handled this interaction, skip
+    if (childClickedRef.current) {
+      childClickedRef.current = false;
+      return;
+    }
     // Only deselect when clicking directly on the canvas background
     if (e.target === e.currentTarget) {
       setSelectedField(null);
