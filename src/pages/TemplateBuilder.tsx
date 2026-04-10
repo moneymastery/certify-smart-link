@@ -232,6 +232,11 @@ const TemplateBuilder = () => {
   };
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    // Guard: if a child element just handled this interaction, skip
+    if (childClickedRef.current) {
+      childClickedRef.current = false;
+      return;
+    }
     // Only deselect when clicking directly on the canvas background
     if (e.target === e.currentTarget) {
       setSelectedField(null);
