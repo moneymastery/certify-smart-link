@@ -177,7 +177,8 @@ export const generateCertificatePDF = async (
     } else {
       xPos = xPct * config.width;
     }
-    const yPos = config.height - yPct * config.height;
+    // Offset by half font size to match CSS translate(-50%, -50%) centering
+    const yPos = config.height - yPct * config.height + nameSize / 2;
     page.drawText(data.recipientName, {
       x: Math.max(20, xPos),
       y: yPos,
@@ -211,7 +212,8 @@ export const generateCertificatePDF = async (
     } else {
       xPos = xPct * config.width;
     }
-    const yPos = config.height - yPct * config.height;
+    // Offset by half font size to match CSS translate(-50%, -50%) centering
+    const yPos = config.height - yPct * config.height + fieldSize / 2;
     page.drawText(value, {
       x: Math.max(20, xPos),
       y: yPos,
