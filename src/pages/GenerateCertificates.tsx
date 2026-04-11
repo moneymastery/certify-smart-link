@@ -281,8 +281,9 @@ const GenerateCertificates = () => {
     });
 
     // Include all mapped fields AND template text fields (those with {{placeholders}})
+    // Include ALL fields: mapped ones, template text ({{}}), AND recipient_name always
     const mappedFields = tmplFields
-      .filter((f: any) => fieldMapping[f.field_key] || f.label.includes("{{"))
+      .filter((f: any) => f.field_key === "recipient_name" || fieldMapping[f.field_key] || f.label.includes("{{"))
       .map((f: any) => ({
         fieldKey: f.field_key,
         label: f.label,
@@ -290,6 +291,7 @@ const GenerateCertificates = () => {
         yPosition: Number(f.y_position),
         fontSize: f.font_size,
         fontColor: f.font_color,
+        fontWeight: f.font_weight || "normal",
         textAlign: f.text_align as "left" | "center" | "right",
         maxWidth: f.max_width ?? undefined,
       }));
@@ -746,7 +748,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                                   top: `${Number(f.y_position)}%`,
                                   transform: "translate(-50%, -50%)",
                                   fontSize: f.font_size,
-                                  fontWeight: f.field_key === "recipient_name" ? "bold" : "normal",
+                                  fontWeight: f.font_weight || "normal",
                                   color: f.font_color || "#000",
                                   textAlign: f.text_align as any,
                                   maxWidth: f.max_width || undefined,

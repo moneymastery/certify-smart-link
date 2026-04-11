@@ -29,6 +29,7 @@ interface FieldItem {
   yPosition: number;
   fontSize: number;
   fontColor: string;
+  fontWeight: string;
   textAlign: string;
   maxWidth: number | null;
 }
