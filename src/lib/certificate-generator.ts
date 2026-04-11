@@ -185,19 +185,23 @@ export const generateCertificatePDF = async (
   // Dynamic fields
   for (const field of config.fields) {
 
-    // Check if label contains {{placeholders}} — treat as template text
+    // Resolve value: recipient_name uses data.recipientName, template text uses {{placeholders}}, others use recipientData
     const isTemplateText = field.label.includes("{{");
     let value: string;
-    if (isTemplateText) {
+    if (field.fieldKey === "recipient_name") {
+      value = data.recipientName && data.recipientName !== "Unknown"
+        ? data.recipientName
+        : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] ||
+          Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] ||
+          "Unknown";
+    } else if (isTemplateText) {
       value = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-        // Try exact key first, then case-insensitive
         const k = key.trim();
         return data.recipientData[k] || 
                Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] || 
                "";
       });
     } else {
-      // Try exact key first, then case-insensitive
       value = data.recipientData[field.fieldKey] || 
               Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] || 
               "";
@@ -206,17 +210,18 @@ export const generateCertificatePDF = async (
 
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
+    const fieldFont = field.fieldKey === "recipient_name" ? fontBold : font;
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
     const maxW = field.maxWidth ?? config.width - 80;
 
     // Word-wrap: split value into lines that fit within maxWidth
-    const lines = wrapText(value, font, fieldSize, maxW);
+    const lines = wrapText(value, fieldFont, fieldSize, maxW);
     const lineHeight = fieldSize * 1.4;
 
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
-      const lineWidth = font.widthOfTextAtSize(line, fieldSize);
+      const lineWidth = fieldFont.widthOfTextAtSize(line, fieldSize);
       let xPos: number;
       if (field.textAlign === "center") {
         xPos = xPct * config.width - lineWidth / 2;
@@ -225,7 +230,7 @@ export const generateCertificatePDF = async (
       } else {
         xPos = xPct * config.width;
       }
-      const yPos = config.height - yPct * config.height + fieldSize / 2 - li * lineHeight;
+      const yPos = config.height - yPct * config.height - li * lineHeight;
       page.drawText(line, {
         x: Math.max(20, xPos),
         y: yPos,
