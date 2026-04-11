@@ -235,7 +235,7 @@ export const generateCertificatePDF = async (
         x: Math.max(20, xPos),
         y: yPos,
         size: fieldSize,
-        font,
+        font: fieldFont,
         color: fieldColor,
       });
     }
