@@ -503,33 +503,54 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 </p>
                 <div className="space-y-2">
                   {templateFields
-                    .filter((f) => f.field_key !== "recipient_name")
-                    .map((f) => {
-                      const isTemplateText = f.label.includes("{{");
-                      return (
-                        <div key={f.field_key} className="flex items-center gap-3">
-                          <span className="text-sm text-foreground w-40 truncate" title={f.label}>{f.label}</span>
-                          <span className="text-muted-foreground text-xs">→</span>
-                          {isTemplateText ? (
-                            <span className="flex-1 text-xs text-muted-foreground italic">Auto-filled from mapped data</span>
-                          ) : (
-                            <select
-                              value={fieldMapping[f.field_key] || ""}
-                              onChange={(e) =>
-                                setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
-                              }
-                              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                            >
-                              <option value="">— Skip —</option>
-                              {csvHeaders.map((h) => (
-                                <option key={h} value={h}>{h}</option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      );
-                    })}
+                    .filter((f) => f.field_key !== "recipient_name" && !f.label.includes("{{"))
+                    .map((f) => (
+                      <div key={f.field_key} className="flex items-center gap-3">
+                        <span className="text-sm text-foreground w-40 truncate" title={f.label}>{f.label}</span>
+                        <span className="text-muted-foreground text-xs">→</span>
+                        <select
+                          value={fieldMapping[f.field_key] || ""}
+                          onChange={(e) =>
+                            setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                          }
+                          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">— Skip —</option>
+                          {csvHeaders.map((h) => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                 </div>
+
+                {/* Placeholder variable mappings from template text fields */}
+                {placeholderVars.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <Label className="text-sm font-medium">Template Text Variables → CSV Column</Label>
+                    <p className="text-xs text-muted-foreground">
+                      These variables appear inside template text like {"{{company}}"}. Map each to the correct CSV column.
+                    </p>
+                    {placeholderVars.map((pv) => (
+                      <div key={pv.varName} className="flex items-center gap-3">
+                        <span className="text-sm text-foreground w-40 font-mono">{`{{${pv.varName}}}`}</span>
+                        <span className="text-muted-foreground text-xs">→</span>
+                        <select
+                          value={fieldMapping[pv.varName] || ""}
+                          onChange={(e) =>
+                            setFieldMapping((prev) => ({ ...prev, [pv.varName]: e.target.value }))
+                          }
+                          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value="">— Skip —</option>
+                          {csvHeaders.map((h) => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
