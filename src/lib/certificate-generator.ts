@@ -53,6 +53,7 @@ export interface GenerationConfig {
     yPosition: number;
     fontSize: number;
     fontColor: string;
+    fontWeight: string;
     textAlign: "left" | "center" | "right";
     maxWidth?: number;
   }[];
@@ -121,6 +122,37 @@ const embedImage = async (pdfDoc: PDFDocument, bytes: Uint8Array, url: string) =
   return pdfDoc.embedJpg(bytes);
 };
 
+/**
+ * Resolve field value from certificate data — single source of truth
+ * used by both preview and PDF generation.
+ */
+export const resolveFieldValue = (
+  field: { fieldKey: string; label: string },
+  data: { recipientName: string; recipientData: Record<string, string> }
+): string => {
+  if (field.fieldKey === "recipient_name") {
+    return data.recipientName && data.recipientName !== "Unknown"
+      ? data.recipientName
+      : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] ||
+        Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] ||
+        "Unknown";
+  }
+
+  const isTemplateText = field.label.includes("{{");
+  if (isTemplateText) {
+    return field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+      const k = key.trim();
+      return data.recipientData[k] ||
+        Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] ||
+        "";
+    });
+  }
+
+  return data.recipientData[field.fieldKey] ||
+    Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] ||
+    "";
+};
+
 export const generateCertificatePDF = async (
   data: CertificateData,
   config: GenerationConfig,
@@ -182,35 +214,15 @@ export const generateCertificatePDF = async (
     }
   }
 
-  // Dynamic fields
+  // Dynamic fields — unified loop, no special-casing
   for (const field of config.fields) {
-
-    // Resolve value: recipient_name uses data.recipientName, template text uses {{placeholders}}, others use recipientData
-    const isTemplateText = field.label.includes("{{");
-    let value: string;
-    if (field.fieldKey === "recipient_name") {
-      value = data.recipientName && data.recipientName !== "Unknown"
-        ? data.recipientName
-        : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] ||
-          Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] ||
-          "Unknown";
-    } else if (isTemplateText) {
-      value = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-        const k = key.trim();
-        return data.recipientData[k] || 
-               Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] || 
-               "";
-      });
-    } else {
-      value = data.recipientData[field.fieldKey] || 
-              Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] || 
-              "";
-    }
+    const value = resolveFieldValue(field, data);
     if (!value.trim()) continue;
 
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
-    const fieldFont = font;
+    // Font weight comes from stored template data — no hardcoding
+    const fieldFont = field.fontWeight === "bold" ? fontBold : font;
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
     const maxW = field.maxWidth ?? config.width - 80;
@@ -219,9 +231,15 @@ export const generateCertificatePDF = async (
     const lines = wrapText(value, fieldFont, fieldSize, maxW);
     const lineHeight = fieldSize * 1.4;
 
+    // Y alignment: replicate CSS transform: translate(-50%, -50%)
+    // The anchor point is at (xPct, yPct). We center the text block vertically around it.
+    const totalTextHeight = lines.length * lineHeight;
+
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
       const lineWidth = fieldFont.widthOfTextAtSize(line, fieldSize);
+
+      // X alignment: replicate CSS translate(-50%) for center
       let xPos: number;
       if (field.textAlign === "center") {
         xPos = xPct * config.width - lineWidth / 2;
@@ -230,8 +248,13 @@ export const generateCertificatePDF = async (
       } else {
         xPos = xPct * config.width;
       }
-      const totalTextHeight = lines.length * lineHeight;
-      const yPos = config.height - yPct * config.height + totalTextHeight / 2 - li * lineHeight - fieldSize * 0.3;
+
+      // PDF Y is bottom-up. CSS top Y% means distance from top.
+      // Center the block vertically: top of block = anchorY + half of totalHeight
+      // Each line drawn from its baseline (ascent ≈ fontSize * 0.7)
+      const anchorY = config.height - yPct * config.height;
+      const yPos = anchorY + totalTextHeight / 2 - li * lineHeight - fieldSize * 0.3;
+
       page.drawText(line, {
         x: Math.max(20, xPos),
         y: yPos,
@@ -315,7 +338,6 @@ export const generateCertificatePDF = async (
     const orgX = (orgXPct / 100) * config.width - orgNameWidth / 2;
     const orgY = config.height - (orgYPct / 100) * config.height;
     page.drawText(config.organizationName, { x: Math.max(10, orgX), y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
-    // Only draw "Authorized Signatory" line on default (no background) templates
     if (!assets?.signatureUrl && !assets?.backgroundUrl) {
       page.drawLine({ start: { x: orgX, y: orgY + 15 }, end: { x: orgX + fontBold.widthOfTextAtSize(config.organizationName, 10), y: orgY + 15 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
       page.drawText("Authorized Signatory", { x: orgX, y: orgY + 22, size: 7, font, color: rgb(0.5, 0.5, 0.5) });
