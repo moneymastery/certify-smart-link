@@ -393,6 +393,7 @@ const TemplateBuilder = () => {
         y_position: f.yPosition,
         font_size: f.fontSize,
         font_color: f.fontColor,
+        font_weight: f.fontWeight,
         text_align: f.textAlign,
         max_width: f.maxWidth,
         sort_order: i,
