@@ -45,9 +45,9 @@ interface AssetSize {
 }
 
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
-  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", textAlign: "center", maxWidth: 600 },
-  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", textAlign: "center", maxWidth: 500 },
-  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", textAlign: "center", maxWidth: 300 },
+  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", maxWidth: 600 },
+  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", maxWidth: 500 },
+  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", maxWidth: 300 },
 ];
 
 type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
@@ -171,6 +171,7 @@ const TemplateBuilder = () => {
           yPosition: Number(f.y_position),
           fontSize: f.font_size,
           fontColor: f.font_color,
+          fontWeight: f.font_weight || "normal",
           textAlign: f.text_align,
           maxWidth: f.max_width,
         }));
@@ -293,6 +294,7 @@ const TemplateBuilder = () => {
       yPosition: 50,
       fontSize: 16,
       fontColor: "#333333",
+      fontWeight: "normal",
       textAlign: "center",
       maxWidth: null,
     };
