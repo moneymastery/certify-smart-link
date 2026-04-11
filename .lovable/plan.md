@@ -2,46 +2,27 @@
 
 ## Root Cause Analysis
 
-Looking at the generated certificate vs what you designed in the template builder, there are several issues causing the messy output:
+### Bug 1: Recipient name disappears on certificates with background images
+In `certificate-generator.ts` (line 224), the code does `if (field.fieldKey === "recipient_name") continue;` which **skips** the recipient_name field from the normal rendering loop. It relies on a special block (lines 186-220) to render the name. But that special block's fallback (line 214) checks `if (!assets?.backgroundUrl)` — so when you have a background image and no dedicated `recipient_name` field position match, **the name is simply never drawn**.
 
-### Problem 1: Extra CSV columns get auto-positioned on top of each other
-When you upload a CSV with columns that aren't saved as template fields (like S/O, D/O, Roll No, Session, Reg No, etc.), the code auto-creates them starting at Y=60% with only 5% vertical spacing. They all pile up in the middle of the certificate, overlapping your background image's existing text.
-
-### Problem 2: Hardcoded elements ignore your background
-The QR code is always placed at bottom-right (fixed pixel position), the Certificate ID always at bottom-center, and the Organization name at bottom-left. These clash with your background image's own footer design (logos, signatures area).
-
-### Problem 3: Fixed asset sizes
-Logo is always 50px tall, signature 40px, seal 60px. These don't scale to match your background's layout.
-
-### Problem 4: No field-to-CSV column mapping
-There's no UI to map which CSV column feeds which template field. The system just dumps all CSV columns as text onto the certificate.
+### Bug 2: Y-coordinate offset between preview and PDF
+The preview (TemplateBuilder) positions elements using CSS `top: Y%` with `transform: translate(-50%, -50%)` — the element is centered on that point. But in the PDF generator, the Y formula is `config.height - yPct * config.height + fontSize / 2`. PDF `drawText` draws from the **baseline** (bottom of text), so `+ fontSize/2` shifts everything upward compared to the CSS preview. The correct offset should account for the centering transform used in the preview.
 
 ---
 
-### Plan
+## Fix Plan
 
-**1. Add CSV-to-field mapping UI in GenerateCertificates**
-- After CSV upload, show a mapping step where each template field can be linked to a CSV column
-- Only mapped fields get rendered; unmapped CSV columns are stored as data but not drawn on the PDF
-- This prevents the "extra fields" from being auto-positioned randomly
+### 1. Remove special `recipient_name` handling in certificate-generator.ts
+- Delete the entire special recipient_name block (lines 186-220)
+- Remove the `if (field.fieldKey === "recipient_name") continue;` skip (line 224)
+- Let recipient_name be rendered by the same dynamic field loop as every other field
+- In the dynamic field loop, when `fieldKey === "recipient_name"`, use `data.recipientName` as the value (and render with the field's own font settings, not forced bold)
 
-**2. Make QR code, Certificate ID, and Org name positions configurable**
-- Add toggle options in the template builder: "Show QR code", "Show Certificate ID", "Show Org name"
-- Add position controls (or make them draggable like other assets)
-- Save these settings to the template so the PDF generator respects them
+### 2. Fix Y-coordinate formula in certificate-generator.ts
+- Change the Y calculation from `config.height - yPct * config.height + fontSize / 2` to `config.height - yPct * config.height` (removing the offset)
+- This applies to both the dynamic fields loop and any remaining positioned elements (QR code, cert ID, org name)
+- The preview uses `transform: translate(-50%, -50%)` to center elements on their point; the PDF should similarly center text on the target point by adjusting for text height
 
-**3. Add asset size controls in the template builder**
-- Allow width/height adjustment for logo, signature, and seal
-- Save sizes to the database and use them in the PDF generator
-- This requires adding `logo_width`, `logo_height`, `signature_width`, `signature_height`, `seal_width`, `seal_height` columns to the templates table
-
-**4. Remove the auto-generation of extra fields**
-- Delete the `extraFields` logic in GenerateCertificates.tsx (lines 228-239)
-- Only use fields explicitly defined in the template
-
-**Files to change:**
-- `src/pages/GenerateCertificates.tsx` — add field mapping UI, remove auto-extra-fields
-- `src/pages/TemplateBuilder.tsx` — add asset size controls, QR/ID/Org toggles
-- `src/lib/certificate-generator.ts` — respect new size settings and toggle flags
-- 1 database migration — add asset size columns and toggle columns to templates table
+### Files to change
+- `src/lib/certificate-generator.ts` — both fixes above
 
