@@ -252,9 +252,9 @@ const GenerateCertificates = () => {
       };
     });
 
-    // Only use fields that have a mapping assigned
+    // Include all mapped fields AND template text fields (those with {{placeholders}})
     const mappedFields = tmplFields
-      .filter((f: any) => fieldMapping[f.field_key])
+      .filter((f: any) => fieldMapping[f.field_key] || f.label.includes("{{"))
       .map((f: any) => ({
         fieldKey: f.field_key,
         label: f.label,
@@ -476,24 +476,31 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 <div className="space-y-2">
                   {templateFields
                     .filter((f) => f.field_key !== "recipient_name")
-                    .map((f) => (
-                    <div key={f.field_key} className="flex items-center gap-3">
-                      <span className="text-sm text-foreground w-40 truncate">{f.label}</span>
-                      <span className="text-muted-foreground text-xs">→</span>
-                      <select
-                        value={fieldMapping[f.field_key] || ""}
-                        onChange={(e) =>
-                          setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
-                        }
-                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        <option value="">— Skip —</option>
-                        {csvHeaders.map((h) => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
+                    .map((f) => {
+                      const isTemplateText = f.label.includes("{{");
+                      return (
+                        <div key={f.field_key} className="flex items-center gap-3">
+                          <span className="text-sm text-foreground w-40 truncate" title={f.label}>{f.label}</span>
+                          <span className="text-muted-foreground text-xs">→</span>
+                          {isTemplateText ? (
+                            <span className="flex-1 text-xs text-muted-foreground italic">Auto-filled from mapped data</span>
+                          ) : (
+                            <select
+                              value={fieldMapping[f.field_key] || ""}
+                              onChange={(e) =>
+                                setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
+                              }
+                              className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                            >
+                              <option value="">— Skip —</option>
+                              {csvHeaders.map((h) => (
+                                <option key={h} value={h}>{h}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
