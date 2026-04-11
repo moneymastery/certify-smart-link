@@ -210,7 +210,7 @@ export const generateCertificatePDF = async (
 
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
-    const fieldFont = field.fieldKey === "recipient_name" ? fontBold : font;
+    const fieldFont = font;
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
     const maxW = field.maxWidth ?? config.width - 80;
@@ -230,7 +230,8 @@ export const generateCertificatePDF = async (
       } else {
         xPos = xPct * config.width;
       }
-      const yPos = config.height - yPct * config.height - li * lineHeight;
+      const totalTextHeight = lines.length * lineHeight;
+      const yPos = config.height - yPct * config.height + totalTextHeight / 2 - li * lineHeight - fieldSize * 0.3;
       page.drawText(line, {
         x: Math.max(20, xPos),
         y: yPos,
