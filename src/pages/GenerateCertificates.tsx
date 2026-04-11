@@ -676,11 +676,17 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                       >
                         {/* Mapped fields with actual data */}
                         {previewFields
-                          .filter((f: any) => fieldMapping[f.field_key] || f.field_key === "recipient_name")
+                          .filter((f: any) => fieldMapping[f.field_key] || f.field_key === "recipient_name" || (f.label && f.label.includes("{{")))
                           .map((f: any) => {
-                            const value = f.field_key === "recipient_name"
-                              ? firstRow[nameColumn] || "Recipient Name"
-                              : firstRow[fieldMapping[f.field_key]] || "";
+                            let value: string;
+                            const isTemplateText = f.label && f.label.includes("{{");
+                            if (f.field_key === "recipient_name") {
+                              value = firstRow[nameColumn] || "Recipient Name";
+                            } else if (isTemplateText) {
+                              value = f.label.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => firstRow[key] || `{{${key}}}`);
+                            } else {
+                              value = firstRow[fieldMapping[f.field_key]] || "";
+                            }
                             if (!value) return null;
                             return (
                               <div
@@ -695,7 +701,8 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                                   color: f.font_color || "#000",
                                   textAlign: f.text_align as any,
                                   maxWidth: f.max_width || undefined,
-                                  whiteSpace: "nowrap",
+                                  whiteSpace: isTemplateText ? "normal" : "nowrap",
+                                  wordBreak: isTemplateText ? "break-word" : undefined,
                                 }}
                               >
                                 {value}
