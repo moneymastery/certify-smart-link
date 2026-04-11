@@ -166,12 +166,29 @@ export const generateCertificatePDF = async (
   const assets = config.assets;
 
   // Background
-  if (assets?.backgroundUrl) {
+   if (assets?.backgroundUrl) {
     const bgBytes = await fetchImageBytes(assets.backgroundUrl);
     if (bgBytes) {
       try {
         const bgImage = await embedImage(pdfDoc, bgBytes, assets.backgroundUrl);
-        page.drawImage(bgImage, { x: 0, y: 0, width: config.width, height: config.height });
+        // Use "cover" scaling to match CSS background-size: cover
+        const imgRatio = bgImage.width / bgImage.height;
+        const pageRatio = config.width / config.height;
+        let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
+        if (imgRatio > pageRatio) {
+          // image is wider → crop sides
+          drawHeight = config.height;
+          drawWidth = drawHeight * imgRatio;
+          offsetX = (config.width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // image is taller → crop top/bottom
+          drawWidth = config.width;
+          drawHeight = drawWidth / imgRatio;
+          offsetX = 0;
+          offsetY = (config.height - drawHeight) / 2;
+        }
+        page.drawImage(bgImage, { x: offsetX, y: offsetY, width: drawWidth, height: drawHeight });
       } catch {
         page.drawRectangle({ x: 0, y: 0, width: config.width, height: config.height, color: rgb(1, 1, 1) });
       }
