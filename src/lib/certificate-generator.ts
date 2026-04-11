@@ -180,10 +180,10 @@ export const generateCertificatePDF = async (
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
     const fieldFont = field.fontWeight === "bold" ? fontBold : font;
-    const maxW = field.maxWidth ?? config.width - 80;
-
     const measure = (s: string) => fieldFont.widthOfTextAtSize(s, fieldSize);
-    const lines = wrapText(value, measure, maxW);
+    const maxW = field.maxWidth;
+    // Only wrap if the template explicitly sets a max_width — matches preview's nowrap default
+    const lines = maxW ? wrapText(value, measure, maxW) : [value];
 
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
