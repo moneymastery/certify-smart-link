@@ -57,7 +57,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
 
           const headerRow = rawRows[headerRowIdx];
           const headers = headerRow
-            .map((h: any) => String(h ?? "").trim())
+            .map((h: any) => String(h ?? "").replace(/[\r\n]+/g, " ").trim())
             .filter((h: string) => h.length > 0);
 
           if (headers.length === 0) {
