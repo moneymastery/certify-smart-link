@@ -266,7 +266,7 @@ export const generateCertificatePDF = async (
     const cidXPct = toggles?.certIdX ?? 50;
     const cidYPct = toggles?.certIdY ?? 90;
     const cidX = (cidXPct / 100) * config.width - idWidth / 2;
-    const cidY = config.height - (cidYPct / 100) * config.height;
+    const cidY = config.height - (cidYPct / 100) * config.height + idSize / 2;
     page.drawText(idText, { x: Math.max(10, cidX), y: cidY, size: idSize, font, color: rgb(0.5, 0.5, 0.5) });
   }
 
@@ -292,9 +292,10 @@ export const generateCertificatePDF = async (
   if (showOrg && config.organizationName) {
     const orgXPct = toggles?.orgNameX ?? 10;
     const orgYPct = toggles?.orgNameY ?? 90;
-    const orgX = (orgXPct / 100) * config.width;
-    const orgY = config.height - (orgYPct / 100) * config.height;
-    page.drawText(config.organizationName, { x: orgX, y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
+    const orgNameWidth = fontBold.widthOfTextAtSize(config.organizationName, 10);
+    const orgX = (orgXPct / 100) * config.width - orgNameWidth / 2;
+    const orgY = config.height - (orgYPct / 100) * config.height + 5;
+    page.drawText(config.organizationName, { x: Math.max(10, orgX), y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
     // Only draw "Authorized Signatory" line on default (no background) templates
     if (!assets?.signatureUrl && !assets?.backgroundUrl) {
       page.drawLine({ start: { x: orgX, y: orgY + 15 }, end: { x: orgX + fontBold.widthOfTextAtSize(config.organizationName, 10), y: orgY + 15 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
