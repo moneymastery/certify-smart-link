@@ -628,6 +628,7 @@ const TemplateBuilder = () => {
                   top: `${field.yPosition}%`,
                   transform: "translate(-50%, -50%)",
                   fontSize: field.fontSize,
+                  fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
                   color: field.fontColor,
                   textAlign: field.textAlign as any,
                   maxWidth: field.maxWidth || undefined,
@@ -731,6 +732,14 @@ const TemplateBuilder = () => {
                   <div className="space-y-1">
                     <Label className="text-xs">Y (%)</Label>
                     <Input type="number" value={Math.round(selectedFieldData.yPosition)} onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })} className="h-8 text-sm" min={0} max={100} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Bold</Label>
+                  <div className="flex gap-1">
+                    {["normal", "bold"].map((w) => (
+                      <Button key={w} variant={selectedFieldData.fontWeight === w ? "default" : "outline"} size="sm" className="flex-1 h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { fontWeight: w })}>{w}</Button>
+                    ))}
                   </div>
                 </div>
                 <div className="space-y-1">
