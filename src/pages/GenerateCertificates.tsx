@@ -21,6 +21,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import CSVUpload from "@/components/dashboard/CSVUpload";
+import CertificatePreview from "@/components/CertificatePreview";
 import { useCertificateGeneration } from "@/hooks/use-certificate-generation";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -701,9 +702,20 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               {showPreview && previewTemplate && csvRows.length > 0 && (() => {
                 const firstRow = csvRows[0];
                 const t = previewTemplate;
-                const bgUrl = t.background_url;
-                const canvasW = 842;
-                const canvasH = 595;
+
+                // Build fields array for the shared preview component
+                const visibleFields = previewFields.filter(
+                  (f: any) =>
+                    f.field_key === "recipient_name" ||
+                    fieldMapping[f.field_key] ||
+                    (f.label && f.label.includes("{{"))
+                );
+
+                // Build recipientData with mapped values
+                const mappedData: Record<string, string> = { ...firstRow };
+                for (const [key, col] of Object.entries(fieldMapping)) {
+                  if (col && firstRow[col] != null) mappedData[key] = String(firstRow[col]);
+                }
 
                 return (
                   <div className="rounded-lg border border-border overflow-hidden bg-muted/30">
@@ -712,148 +724,13 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                         Preview — {firstRow[nameColumn] || "Row 1"} (first recipient)
                       </span>
                     </div>
-                    <div className="flex items-center justify-center p-4 overflow-auto">
-                      <div
-                        className="relative bg-background border border-border shadow"
-                        style={{
-                          width: canvasW,
-                          height: canvasH,
-                          transform: "scale(0.7)",
-                          transformOrigin: "top center",
-                          backgroundImage: bgUrl ? `url(${bgUrl})` : undefined,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        {/* Mapped fields with actual data */}
-                        {previewFields
-                          .filter((f: any) => fieldMapping[f.field_key] || f.field_key === "recipient_name" || (f.label && f.label.includes("{{")))
-                          .map((f: any) => {
-                            let value: string;
-                            const isTemplateText = f.label && f.label.includes("{{");
-                            if (f.field_key === "recipient_name") {
-                              value = firstRow[nameColumn] || "Recipient Name";
-                            } else if (isTemplateText) {
-                              value = f.label.replace(/\{\{(\w+)\}\}/g, (_: string, key: string) => firstRow[key] || `{{${key}}}`);
-                            } else {
-                              value = firstRow[fieldMapping[f.field_key]] || "";
-                            }
-                            if (!value) return null;
-                            return (
-                              <div
-                                key={f.id}
-                                className="absolute"
-                                style={{
-                                  left: `${Number(f.x_position)}%`,
-                                  top: `${Number(f.y_position)}%`,
-                                  transform: "translate(-50%, -50%)",
-                                  fontSize: f.font_size,
-                                  fontWeight: f.font_weight || "normal",
-                                  color: f.font_color || "#000",
-                                  textAlign: f.text_align as any,
-                                  maxWidth: f.max_width || undefined,
-                                  whiteSpace: isTemplateText ? "normal" : "nowrap",
-                                  wordBreak: isTemplateText ? "break-word" : undefined,
-                                }}
-                              >
-                                {value}
-                              </div>
-                            );
-                          })}
-
-                        {/* QR Code placeholder */}
-                        {t.show_qr_code !== false && (
-                          <div
-                            className="absolute flex flex-col items-center"
-                            style={{
-                              left: `${Number(t.qr_code_x ?? 90)}%`,
-                              top: `${Number(t.qr_code_y ?? 90)}%`,
-                              transform: "translate(-50%, -50%)",
-                            }}
-                          >
-                            <div className="w-14 h-14 border-2 border-dashed border-muted-foreground/60 bg-background/50 rounded flex items-center justify-center">
-                              <span className="text-[9px] text-muted-foreground font-medium">QR</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Certificate ID */}
-                        {t.show_certificate_id !== false && (
-                          <div
-                            className="absolute"
-                            style={{
-                              left: `${Number(t.cert_id_x ?? 50)}%`,
-                              top: `${Number(t.cert_id_y ?? 90)}%`,
-                              transform: "translate(-50%, -50%)",
-                            }}
-                          >
-                            <span className="text-[9px] text-muted-foreground">Certificate ID: CERT-XXXXXX</span>
-                          </div>
-                        )}
-
-                        {/* Organization Name */}
-                        {t.show_org_name !== false && (
-                          <div
-                            className="absolute"
-                            style={{
-                              left: `${Number(t.org_name_x ?? 10)}%`,
-                              top: `${Number(t.org_name_y ?? 90)}%`,
-                              transform: "translate(-50%, -50%)",
-                            }}
-                          >
-                            <span className="text-[10px] font-bold text-foreground/70">{orgName || "Org Name"}</span>
-                          </div>
-                        )}
-
-                        {/* Logo */}
-                        {t.logo_url && (
-                          <img
-                            src={t.logo_url}
-                            alt="Logo"
-                            className="absolute object-contain"
-                            style={{
-                              left: `${Number(t.logo_x ?? 50)}%`,
-                              top: `${Number(t.logo_y ?? 5)}%`,
-                              transform: "translate(-50%, -50%)",
-                              height: t.logo_height > 0 ? t.logo_height : 50,
-                              width: t.logo_width > 0 ? t.logo_width : "auto",
-                            }}
-                          />
-                        )}
-
-                        {/* Signature */}
-                        {t.signature_url && (
-                          <img
-                            src={t.signature_url}
-                            alt="Signature"
-                            className="absolute object-contain"
-                            style={{
-                              left: `${Number(t.signature_x ?? 25)}%`,
-                              top: `${Number(t.signature_y ?? 85)}%`,
-                              transform: "translate(-50%, -50%)",
-                              height: t.signature_height > 0 ? t.signature_height : 40,
-                              width: t.signature_width > 0 ? t.signature_width : "auto",
-                            }}
-                          />
-                        )}
-
-                        {/* Seal */}
-                        {t.seal_url && (
-                          <img
-                            src={t.seal_url}
-                            alt="Seal"
-                            className="absolute object-contain"
-                            style={{
-                              left: `${Number(t.seal_x ?? 80)}%`,
-                              top: `${Number(t.seal_y ?? 82)}%`,
-                              transform: "translate(-50%, -50%)",
-                              height: t.seal_height > 0 ? t.seal_height : 60,
-                              width: t.seal_width > 0 ? t.seal_width : "auto",
-                            }}
-                          />
-                        )}
-                      </div>
-                    </div>
+                    <CertificatePreview
+                      template={t}
+                      fields={visibleFields}
+                      recipientData={mappedData}
+                      recipientName={String(firstRow[nameColumn] || "Recipient Name")}
+                      orgName={orgName}
+                    />
                   </div>
                 );
               })()}
