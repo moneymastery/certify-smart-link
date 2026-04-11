@@ -222,11 +222,18 @@ export const generateCertificatePDF = async (
     const isTemplateText = field.label.includes("{{");
     let value: string;
     if (isTemplateText) {
-      value = field.label.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-        return data.recipientData[key] || "";
+      value = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+        // Try exact key first, then case-insensitive
+        const k = key.trim();
+        return data.recipientData[k] || 
+               Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] || 
+               "";
       });
     } else {
-      value = data.recipientData[field.fieldKey] || "";
+      // Try exact key first, then case-insensitive
+      value = data.recipientData[field.fieldKey] || 
+              Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] || 
+              "";
     }
     if (!value.trim()) continue;
 
