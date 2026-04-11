@@ -182,46 +182,8 @@ export const generateCertificatePDF = async (
     }
   }
 
-  // Recipient name — use the dedicated recipientName field
-  const nameField = config.fields.find(f => f.fieldKey === "recipient_name");
-  const recipientName = data.recipientName && data.recipientName !== "Unknown" 
-    ? data.recipientName 
-    : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] || 
-      Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] || 
-      "Unknown";
-  
-  if (nameField) {
-    const nameSize = nameField.fontSize || 28;
-    const nameWidth = fontBold.widthOfTextAtSize(recipientName, nameSize);
-    const xPct = nameField.xPosition / 100;
-    const yPct = nameField.yPosition / 100;
-    let xPos: number;
-    if (nameField.textAlign === "center") {
-      xPos = xPct * config.width - nameWidth / 2;
-    } else if (nameField.textAlign === "right") {
-      xPos = xPct * config.width - nameWidth;
-    } else {
-      xPos = xPct * config.width;
-    }
-    const yPos = config.height - yPct * config.height + nameSize / 2;
-    page.drawText(recipientName, {
-      x: Math.max(20, xPos),
-      y: yPos,
-      size: nameSize,
-      font: fontBold,
-      color: hexToRgb(nameField.fontColor || "#1a1a2e"),
-    });
-  } else if (!assets?.backgroundUrl) {
-    const nameSize = 28;
-    const nameWidth = fontBold.widthOfTextAtSize(recipientName, nameSize);
-    page.drawText(recipientName, { x: (config.width - nameWidth) / 2, y: config.height - 245, size: nameSize, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
-    const lineWidth = Math.min(nameWidth + 60, config.width - 200);
-    page.drawLine({ start: { x: (config.width - lineWidth) / 2, y: config.height - 260 }, end: { x: (config.width + lineWidth) / 2, y: config.height - 260 }, thickness: 1, color: rgb(0.6, 0.75, 0.65) });
-  }
-
   // Dynamic fields
   for (const field of config.fields) {
-    if (field.fieldKey === "recipient_name") continue;
 
     // Check if label contains {{placeholders}} — treat as template text
     const isTemplateText = field.label.includes("{{");
