@@ -1,0 +1,202 @@
+/**
+ * Shared certificate layout engine.
+ * Both the HTML preview and the PDF generator use these constants and
+ * functions so that coordinates, wrapping, and alignment are identical.
+ */
+
+// ── Shared constants ──────────────────────────────────────────────
+/** Line-height multiplier applied to fontSize. Both preview CSS and PDF must use this. */
+export const LINE_HEIGHT_RATIO = 1.3;
+
+/**
+ * Approximate ascent ratio for Helvetica / Arial (used to convert
+ * CSS-centred position → PDF baseline position).
+ * Helvetica ascent = 718/1000 ≈ 0.718, descent = 207/1000 ≈ 0.207.
+ */
+const ASCENT_RATIO = 0.75; // slightly rounded for cross-browser safety
+
+// ── Field value resolution ────────────────────────────────────────
+export interface FieldDescriptor {
+  fieldKey: string;
+  label: string;
+}
+
+export interface RecipientDescriptor {
+  recipientName: string;
+  recipientData: Record<string, string>;
+}
+
+/**
+ * Single source of truth for resolving a field's display value.
+ * Used identically in the preview component and the PDF generator.
+ */
+export const resolveFieldValue = (
+  field: FieldDescriptor,
+  data: RecipientDescriptor
+): string => {
+  if (field.fieldKey === "recipient_name") {
+    return data.recipientName && data.recipientName !== "Unknown"
+      ? data.recipientName
+      : data.recipientData["recipient_name"] ||
+        data.recipientData["name"] ||
+        data.recipientData["NAME"] ||
+        Object.entries(data.recipientData).find(
+          ([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org")
+        )?.[1] ||
+        "Unknown";
+  }
+
+  const isTemplateText = field.label.includes("{{");
+  if (isTemplateText) {
+    return field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+      const k = key.trim();
+      return (
+        data.recipientData[k] ||
+        Object.entries(data.recipientData).find(
+          ([rk]) => rk.toLowerCase() === k.toLowerCase()
+        )?.[1] ||
+        ""
+      );
+    });
+  }
+
+  return (
+    data.recipientData[field.fieldKey] ||
+    Object.entries(data.recipientData).find(
+      ([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase()
+    )?.[1] ||
+    ""
+  );
+};
+
+// ── Background "cover" scaling ────────────────────────────────────
+export interface CoverDimensions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Compute draw dimensions that replicate CSS `background-size: cover`.
+ * The image is scaled so that the shortest axis fills the canvas and
+ * the overflow is cropped equally on both sides.
+ */
+export const computeCoverDimensions = (
+  imgWidth: number,
+  imgHeight: number,
+  canvasWidth: number,
+  canvasHeight: number
+): CoverDimensions => {
+  const imgRatio = imgWidth / imgHeight;
+  const canvasRatio = canvasWidth / canvasHeight;
+
+  let drawWidth: number;
+  let drawHeight: number;
+
+  if (imgRatio > canvasRatio) {
+    // Image is wider than canvas → match heights, crop sides
+    drawHeight = canvasHeight;
+    drawWidth = drawHeight * imgRatio;
+  } else {
+    // Image is taller → match widths, crop top/bottom
+    drawWidth = canvasWidth;
+    drawHeight = drawWidth / imgRatio;
+  }
+
+  return {
+    x: (canvasWidth - drawWidth) / 2,
+    y: (canvasHeight - drawHeight) / 2,
+    width: drawWidth,
+    height: drawHeight,
+  };
+};
+
+// ── Text baseline computation (PDF) ──────────────────────────────
+/**
+ * Convert a CSS-style centre-anchor (top: Y%, left: X% with
+ * transform translate(-50%,-50%)) into a pdf-lib baseline position.
+ *
+ * PDF y-axis runs bottom→up while CSS runs top→down.
+ *
+ * @param canvasH   Total canvas height (px / PDF units)
+ * @param yPct      Y percentage (0–100) from CSS top
+ * @param fontSize  Font size (px / PDF units)
+ * @param totalLines Number of wrapped lines
+ * @param lineIndex  Current line index (0-based)
+ * @returns y coordinate for pdf-lib drawText (baseline)
+ */
+export const computePdfBaselineY = (
+  canvasH: number,
+  yPct: number,
+  fontSize: number,
+  totalLines: number,
+  lineIndex: number
+): number => {
+  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+  const totalH = totalLines * lineHeight;
+  const anchorY = canvasH - (yPct / 100) * canvasH;
+
+  // Derivation:
+  //   CSS centre of text block = yPct% from top
+  //   CSS baseline of line i  = centre - totalH/2 + i*lineHeight + (lineHeight-fontSize)/2 + ascent
+  //   PDF baseline             = canvasH - CSS_baseline
+  //     = anchorY + totalH/2 - i*lineHeight - (lineHeight-fontSize)/2 - fontSize*ASCENT_RATIO
+  return (
+    anchorY +
+    totalH / 2 -
+    lineIndex * lineHeight -
+    (lineHeight - fontSize) / 2 -
+    fontSize * ASCENT_RATIO
+  );
+};
+
+// ── Text X position (PDF) ────────────────────────────────────────
+/**
+ * Compute x position for a line of text matching CSS text-align +
+ * translate(-50%) centring on the anchor point.
+ */
+export const computePdfTextX = (
+  canvasW: number,
+  xPct: number,
+  lineWidth: number,
+  textAlign: "left" | "center" | "right"
+): number => {
+  const anchor = (xPct / 100) * canvasW;
+  switch (textAlign) {
+    case "center":
+      return anchor - lineWidth / 2;
+    case "right":
+      return anchor - lineWidth;
+    default:
+      return anchor;
+  }
+};
+
+// ── Word-wrap (shared) ───────────────────────────────────────────
+/**
+ * Word-wrap text to fit within maxWidth.
+ * `measure` is a function that returns the pixel width of a string
+ * (injected so both the PDF font and browser canvas can be used).
+ */
+export const wrapText = (
+  text: string,
+  measure: (s: string) => number,
+  maxWidth: number
+): string[] => {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (measure(testLine) > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.length > 0 ? lines : [""];
+};
