@@ -182,60 +182,26 @@ export const generateCertificatePDF = async (
     }
   }
 
-  // Recipient name — use the dedicated recipientName field
-  const nameField = config.fields.find(f => f.fieldKey === "recipient_name");
-  const recipientName = data.recipientName && data.recipientName !== "Unknown" 
-    ? data.recipientName 
-    : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] || 
-      Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] || 
-      "Unknown";
-  
-  if (nameField) {
-    const nameSize = nameField.fontSize || 28;
-    const nameWidth = fontBold.widthOfTextAtSize(recipientName, nameSize);
-    const xPct = nameField.xPosition / 100;
-    const yPct = nameField.yPosition / 100;
-    let xPos: number;
-    if (nameField.textAlign === "center") {
-      xPos = xPct * config.width - nameWidth / 2;
-    } else if (nameField.textAlign === "right") {
-      xPos = xPct * config.width - nameWidth;
-    } else {
-      xPos = xPct * config.width;
-    }
-    const yPos = config.height - yPct * config.height + nameSize / 2;
-    page.drawText(recipientName, {
-      x: Math.max(20, xPos),
-      y: yPos,
-      size: nameSize,
-      font: fontBold,
-      color: hexToRgb(nameField.fontColor || "#1a1a2e"),
-    });
-  } else if (!assets?.backgroundUrl) {
-    const nameSize = 28;
-    const nameWidth = fontBold.widthOfTextAtSize(recipientName, nameSize);
-    page.drawText(recipientName, { x: (config.width - nameWidth) / 2, y: config.height - 245, size: nameSize, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
-    const lineWidth = Math.min(nameWidth + 60, config.width - 200);
-    page.drawLine({ start: { x: (config.width - lineWidth) / 2, y: config.height - 260 }, end: { x: (config.width + lineWidth) / 2, y: config.height - 260 }, thickness: 1, color: rgb(0.6, 0.75, 0.65) });
-  }
-
   // Dynamic fields
   for (const field of config.fields) {
-    if (field.fieldKey === "recipient_name") continue;
 
-    // Check if label contains {{placeholders}} — treat as template text
+    // Resolve value: recipient_name uses data.recipientName, template text uses {{placeholders}}, others use recipientData
     const isTemplateText = field.label.includes("{{");
     let value: string;
-    if (isTemplateText) {
+    if (field.fieldKey === "recipient_name") {
+      value = data.recipientName && data.recipientName !== "Unknown"
+        ? data.recipientName
+        : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] ||
+          Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] ||
+          "Unknown";
+    } else if (isTemplateText) {
       value = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-        // Try exact key first, then case-insensitive
         const k = key.trim();
         return data.recipientData[k] || 
                Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] || 
                "";
       });
     } else {
-      // Try exact key first, then case-insensitive
       value = data.recipientData[field.fieldKey] || 
               Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] || 
               "";
@@ -244,17 +210,18 @@ export const generateCertificatePDF = async (
 
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
+    const fieldFont = field.fieldKey === "recipient_name" ? fontBold : font;
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
     const maxW = field.maxWidth ?? config.width - 80;
 
     // Word-wrap: split value into lines that fit within maxWidth
-    const lines = wrapText(value, font, fieldSize, maxW);
+    const lines = wrapText(value, fieldFont, fieldSize, maxW);
     const lineHeight = fieldSize * 1.4;
 
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
-      const lineWidth = font.widthOfTextAtSize(line, fieldSize);
+      const lineWidth = fieldFont.widthOfTextAtSize(line, fieldSize);
       let xPos: number;
       if (field.textAlign === "center") {
         xPos = xPct * config.width - lineWidth / 2;
@@ -263,12 +230,12 @@ export const generateCertificatePDF = async (
       } else {
         xPos = xPct * config.width;
       }
-      const yPos = config.height - yPct * config.height + fieldSize / 2 - li * lineHeight;
+      const yPos = config.height - yPct * config.height - li * lineHeight;
       page.drawText(line, {
         x: Math.max(20, xPos),
         y: yPos,
         size: fieldSize,
-        font,
+        font: fieldFont,
         color: fieldColor,
       });
     }
@@ -317,7 +284,7 @@ export const generateCertificatePDF = async (
     const cidXPct = toggles?.certIdX ?? 50;
     const cidYPct = toggles?.certIdY ?? 90;
     const cidX = (cidXPct / 100) * config.width - idWidth / 2;
-    const cidY = config.height - (cidYPct / 100) * config.height + idSize / 2;
+    const cidY = config.height - (cidYPct / 100) * config.height;
     page.drawText(idText, { x: Math.max(10, cidX), y: cidY, size: idSize, font, color: rgb(0.5, 0.5, 0.5) });
   }
 
@@ -345,7 +312,7 @@ export const generateCertificatePDF = async (
     const orgYPct = toggles?.orgNameY ?? 90;
     const orgNameWidth = fontBold.widthOfTextAtSize(config.organizationName, 10);
     const orgX = (orgXPct / 100) * config.width - orgNameWidth / 2;
-    const orgY = config.height - (orgYPct / 100) * config.height + 5;
+    const orgY = config.height - (orgYPct / 100) * config.height;
     page.drawText(config.organizationName, { x: Math.max(10, orgX), y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
     // Only draw "Authorized Signatory" line on default (no background) templates
     if (!assets?.signatureUrl && !assets?.backgroundUrl) {
