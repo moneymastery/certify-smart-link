@@ -39,21 +39,44 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           const workbook = XLSX.read(data, { type: "array" });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
 
-          if (jsonData.length === 0) {
-            setError("Spreadsheet is empty");
+          // Convert to raw 2D array to detect the real header row
+          const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
+
+          // Find the first row where at least 3 non-empty cells exist and
+          // it doesn't look like a merged title (most cells are empty/null)
+          let headerRowIdx = 0;
+          for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+            const row = rawRows[i];
+            const nonEmpty = row.filter((c: any) => c !== null && c !== undefined && String(c).trim() !== "").length;
+            if (nonEmpty >= 3) {
+              headerRowIdx = i;
+              break;
+            }
+          }
+
+          const headerRow = rawRows[headerRowIdx];
+          const headers = headerRow
+            .map((h: any) => String(h ?? "").trim())
+            .filter((h: string) => h.length > 0);
+
+          if (headers.length === 0) {
+            setError("Could not find valid column headers in the spreadsheet.");
             return;
           }
 
-          const headers = Object.keys(jsonData[0]).map((h) => String(h).trim());
-          const rows = jsonData.map((row) => {
+          const dataRows = rawRows.slice(headerRowIdx + 1);
+          const rows: Record<string, string>[] = [];
+          for (const row of dataRows) {
+            // Skip completely empty rows
+            const nonEmpty = row.filter((c: any) => c !== null && c !== undefined && String(c).trim() !== "").length;
+            if (nonEmpty === 0) continue;
             const cleaned: Record<string, string> = {};
-            for (const key of headers) {
-              cleaned[key] = String(row[key] ?? "").trim();
+            for (let ci = 0; ci < headers.length; ci++) {
+              cleaned[headers[ci]] = String(row[ci] ?? "").trim();
             }
-            return cleaned;
-          });
+            rows.push(cleaned);
+          }
 
           processRows(headers, rows);
         } catch {
