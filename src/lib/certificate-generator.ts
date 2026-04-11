@@ -60,6 +60,26 @@ export interface GenerationConfig {
   displayToggles?: DisplayToggles;
 }
 
+/** Word-wrap text to fit within maxWidth pixels */
+const wrapText = (text: string, fontObj: any, fontSize: number, maxWidth: number): string[] => {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const testWidth = fontObj.widthOfTextAtSize(testLine, fontSize);
+    if (testWidth > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  return lines.length > 0 ? lines : [""];
+};
+
 const hexToRgb = (hex: string) => {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -197,30 +217,49 @@ export const generateCertificatePDF = async (
   // Dynamic fields
   for (const field of config.fields) {
     if (field.fieldKey === "recipient_name") continue;
-    const value = data.recipientData[field.fieldKey] || "";
-    if (!value) continue;
+
+    // Check if label contains {{placeholders}} — treat as template text
+    const isTemplateText = field.label.includes("{{");
+    let value: string;
+    if (isTemplateText) {
+      value = field.label.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+        return data.recipientData[key] || "";
+      });
+    } else {
+      value = data.recipientData[field.fieldKey] || "";
+    }
+    if (!value.trim()) continue;
 
     const fieldSize = field.fontSize || 12;
-    const textWidth = font.widthOfTextAtSize(value, fieldSize);
+    const fieldColor = hexToRgb(field.fontColor || "#333333");
     const xPct = field.xPosition / 100;
     const yPct = field.yPosition / 100;
-    let xPos: number;
-    if (field.textAlign === "center") {
-      xPos = xPct * config.width - textWidth / 2;
-    } else if (field.textAlign === "right") {
-      xPos = xPct * config.width - textWidth;
-    } else {
-      xPos = xPct * config.width;
+    const maxW = field.maxWidth ?? config.width - 80;
+
+    // Word-wrap: split value into lines that fit within maxWidth
+    const lines = wrapText(value, font, fieldSize, maxW);
+    const lineHeight = fieldSize * 1.4;
+
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const lineWidth = font.widthOfTextAtSize(line, fieldSize);
+      let xPos: number;
+      if (field.textAlign === "center") {
+        xPos = xPct * config.width - lineWidth / 2;
+      } else if (field.textAlign === "right") {
+        xPos = xPct * config.width - lineWidth;
+      } else {
+        xPos = xPct * config.width;
+      }
+      const yPos = config.height - yPct * config.height + fieldSize / 2 - li * lineHeight;
+      page.drawText(line, {
+        x: Math.max(20, xPos),
+        y: yPos,
+        size: fieldSize,
+        font,
+        color: fieldColor,
+      });
     }
-    // Offset by half font size to match CSS translate(-50%, -50%) centering
-    const yPos = config.height - yPct * config.height + fieldSize / 2;
-    page.drawText(value, {
-      x: Math.max(20, xPos),
-      y: yPos,
-      size: fieldSize,
-      font,
-      color: hexToRgb(field.fontColor || "#333333"),
-    });
   }
 
   // Signature — use saved position and size

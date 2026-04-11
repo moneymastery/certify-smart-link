@@ -708,11 +708,15 @@ const TemplateBuilder = () => {
 
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Label</Label>
+                  <Label className="text-xs">Label / Template Text</Label>
                   <Input value={selectedFieldData.label} onChange={(e) => updateField(selectedFieldData.id, { label: e.target.value })} className="h-8 text-sm" />
+                  <p className="text-[10px] text-muted-foreground leading-tight">
+                    Use <code className="bg-muted px-0.5 rounded">{"{{column_name}}"}</code> for inline data, e.g.{" "}
+                    <code className="bg-muted px-0.5 rounded text-[9px]">{"S/O, D/O {{father_name}}"}</code>
+                  </p>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Field Key (CSV column)</Label>
+                  <Label className="text-xs">Field Key</Label>
                   <Input value={selectedFieldData.fieldKey} onChange={(e) => updateField(selectedFieldData.id, { fieldKey: e.target.value })} className="h-8 text-sm font-mono" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
