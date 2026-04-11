@@ -135,22 +135,38 @@ const GenerateCertificates = () => {
 
   const [templateFields, setTemplateFields] = useState<{ field_key: string; label: string }[]>([]);
 
+  // Extract {{placeholder}} variable names from template text fields
+  const placeholderVars = useMemo(() => {
+    const vars: { varName: string; fromField: string }[] = [];
+    const seen = new Set<string>();
+    for (const f of templateFields) {
+      const matches = f.label.matchAll(/\{\{(\w+)\}\}/g);
+      for (const m of matches) {
+        if (!seen.has(m[1])) {
+          seen.add(m[1]);
+          vars.push({ varName: m[1], fromField: f.field_key });
+        }
+      }
+    }
+    return vars;
+  }, [templateFields]);
+
   const handleDataParsed = (headers: string[], rows: Record<string, string>[]) => {
     setCsvHeaders(headers);
     setCsvRows(rows);
 
     const nameCandidates = headers.filter((h) =>
-      ["name", "recipient_name", "full_name", "student_name"].includes(h.toLowerCase())
+      ["name", "recipient_name", "full_name", "student_name"].includes(h.toLowerCase().trim())
     );
     if (nameCandidates.length > 0) setNameColumn(nameCandidates[0]);
 
     const emailCandidates = headers.filter((h) =>
-      ["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
+      ["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim())
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
     const preSelected = headers.filter(
-      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase())
+      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim())
     );
     setVerificationFields(preSelected);
 
@@ -167,12 +183,24 @@ const GenerateCertificates = () => {
         .eq("template_id", templateId)
         .order("sort_order");
       setTemplateFields(data || []);
-      // Auto-map by matching field_key to CSV header
+      // Auto-map: match field_key AND placeholder vars to CSV headers (case-insensitive, with underscore/space normalization)
       if (data && csvHeaders.length > 0) {
         const autoMap: Record<string, string> = {};
+        const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
         for (const f of data) {
-          const match = csvHeaders.find((h) => h.toLowerCase() === f.field_key.toLowerCase());
+          const match = csvHeaders.find((h) => normalize(h) === normalize(f.field_key));
           if (match) autoMap[f.field_key] = match;
+        }
+        // Also auto-map placeholder variable names
+        for (const f of data) {
+          const matches = f.label.matchAll(/\{\{(\w+)\}\}/g);
+          for (const m of matches) {
+            const varName = m[1];
+            if (!autoMap[varName]) {
+              const match = csvHeaders.find((h) => normalize(h) === normalize(varName));
+              if (match) autoMap[varName] = match;
+            }
+          }
         }
         setFieldMapping(autoMap);
       }
@@ -239,14 +267,14 @@ const GenerateCertificates = () => {
     // Build recipientData using field mapping so only mapped fields get values
     const batchRows = csvRows.map((row) => {
       const mappedData: Record<string, string> = {};
+      // Map all field keys AND placeholder variable names to their CSV values
       for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
-        if (csvCol && row[csvCol]) {
-          mappedData[fieldKey] = row[csvCol];
+        if (csvCol && row[csvCol] != null) {
+          mappedData[fieldKey] = String(row[csvCol]);
         }
       }
-      // Also keep all raw CSV data for recipient_data storage
       return {
-        recipientName: row[nameColumn] || "Unknown",
+        recipientName: String(row[nameColumn] || "").trim() || "Unknown",
         recipientEmail: emailColumn ? row[emailColumn] : undefined,
         recipientData: { ...row, ...mappedData },
       };
