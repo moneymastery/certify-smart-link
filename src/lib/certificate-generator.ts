@@ -1,5 +1,13 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import QRCode from "qrcode";
+import {
+  LINE_HEIGHT_RATIO,
+  resolveFieldValue,
+  computeCoverDimensions,
+  computePdfBaselineY,
+  computePdfTextX,
+  wrapText,
+} from "./certificate-layout";
 
 export interface CertificateData {
   recipientName: string;
@@ -61,26 +69,6 @@ export interface GenerationConfig {
   displayToggles?: DisplayToggles;
 }
 
-/** Word-wrap text to fit within maxWidth pixels */
-const wrapText = (text: string, fontObj: any, fontSize: number, maxWidth: number): string[] => {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const testWidth = fontObj.widthOfTextAtSize(testLine, fontSize);
-    if (testWidth > maxWidth && currentLine) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  }
-  if (currentLine) lines.push(currentLine);
-  return lines.length > 0 ? lines : [""];
-};
-
 const hexToRgb = (hex: string) => {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -122,37 +110,6 @@ const embedImage = async (pdfDoc: PDFDocument, bytes: Uint8Array, url: string) =
   return pdfDoc.embedJpg(bytes);
 };
 
-/**
- * Resolve field value from certificate data — single source of truth
- * used by both preview and PDF generation.
- */
-export const resolveFieldValue = (
-  field: { fieldKey: string; label: string },
-  data: { recipientName: string; recipientData: Record<string, string> }
-): string => {
-  if (field.fieldKey === "recipient_name") {
-    return data.recipientName && data.recipientName !== "Unknown"
-      ? data.recipientName
-      : data.recipientData["recipient_name"] || data.recipientData["name"] || data.recipientData["NAME"] ||
-        Object.entries(data.recipientData).find(([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"))?.[1] ||
-        "Unknown";
-  }
-
-  const isTemplateText = field.label.includes("{{");
-  if (isTemplateText) {
-    return field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
-      const k = key.trim();
-      return data.recipientData[k] ||
-        Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] ||
-        "";
-    });
-  }
-
-  return data.recipientData[field.fieldKey] ||
-    Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] ||
-    "";
-};
-
 export const generateCertificatePDF = async (
   data: CertificateData,
   config: GenerationConfig,
@@ -171,24 +128,8 @@ export const generateCertificatePDF = async (
     if (bgBytes) {
       try {
         const bgImage = await embedImage(pdfDoc, bgBytes, assets.backgroundUrl);
-        // Use "cover" scaling to match CSS background-size: cover
-        const imgRatio = bgImage.width / bgImage.height;
-        const pageRatio = config.width / config.height;
-        let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
-        if (imgRatio > pageRatio) {
-          // image is wider → crop sides
-          drawHeight = config.height;
-          drawWidth = drawHeight * imgRatio;
-          offsetX = (config.width - drawWidth) / 2;
-          offsetY = 0;
-        } else {
-          // image is taller → crop top/bottom
-          drawWidth = config.width;
-          drawHeight = drawWidth / imgRatio;
-          offsetX = 0;
-          offsetY = (config.height - drawHeight) / 2;
-        }
-        page.drawImage(bgImage, { x: offsetX, y: offsetY, width: drawWidth, height: drawHeight });
+        const cover = computeCoverDimensions(bgImage.width, bgImage.height, config.width, config.height);
+        page.drawImage(bgImage, { x: cover.x, y: cover.y, width: cover.width, height: cover.height });
       } catch {
         page.drawRectangle({ x: 0, y: 0, width: config.width, height: config.height, color: rgb(1, 1, 1) });
       }
@@ -238,39 +179,18 @@ export const generateCertificatePDF = async (
 
     const fieldSize = field.fontSize || 12;
     const fieldColor = hexToRgb(field.fontColor || "#333333");
-    // Font weight comes from stored template data — no hardcoding
     const fieldFont = field.fontWeight === "bold" ? fontBold : font;
-    const xPct = field.xPosition / 100;
-    const yPct = field.yPosition / 100;
     const maxW = field.maxWidth ?? config.width - 80;
 
-    // Word-wrap: split value into lines that fit within maxWidth
-    const lines = wrapText(value, fieldFont, fieldSize, maxW);
-    const lineHeight = fieldSize * 1.4;
-
-    // Y alignment: replicate CSS transform: translate(-50%, -50%)
-    // The anchor point is at (xPct, yPct). We center the text block vertically around it.
-    const totalTextHeight = lines.length * lineHeight;
+    const measure = (s: string) => fieldFont.widthOfTextAtSize(s, fieldSize);
+    const lines = wrapText(value, measure, maxW);
 
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
-      const lineWidth = fieldFont.widthOfTextAtSize(line, fieldSize);
+      const lineWidth = measure(line);
 
-      // X alignment: replicate CSS translate(-50%) for center
-      let xPos: number;
-      if (field.textAlign === "center") {
-        xPos = xPct * config.width - lineWidth / 2;
-      } else if (field.textAlign === "right") {
-        xPos = xPct * config.width - lineWidth;
-      } else {
-        xPos = xPct * config.width;
-      }
-
-      // PDF Y is bottom-up. CSS top Y% means distance from top.
-      // Center the block vertically: top of block = anchorY + half of totalHeight
-      // Each line drawn from its baseline (ascent ≈ fontSize * 0.7)
-      const anchorY = config.height - yPct * config.height;
-      const yPos = anchorY + totalTextHeight / 2 - li * lineHeight - fieldSize * 0.3;
+      const xPos = computePdfTextX(config.width, field.xPosition, lineWidth, field.textAlign);
+      const yPos = computePdfBaselineY(config.height, field.yPosition, fieldSize, lines.length, li);
 
       page.drawText(line, {
         x: Math.max(20, xPos),
@@ -322,10 +242,8 @@ export const generateCertificatePDF = async (
     const idText = `Certificate ID: ${data.serialNumber}`;
     const idSize = 9;
     const idWidth = font.widthOfTextAtSize(idText, idSize);
-    const cidXPct = toggles?.certIdX ?? 50;
-    const cidYPct = toggles?.certIdY ?? 90;
-    const cidX = (cidXPct / 100) * config.width - idWidth / 2;
-    const cidY = config.height - (cidYPct / 100) * config.height;
+    const cidX = computePdfTextX(config.width, toggles?.certIdX ?? 50, idWidth, "center");
+    const cidY = computePdfBaselineY(config.height, toggles?.certIdY ?? 90, idSize, 1, 0);
     page.drawText(idText, { x: Math.max(10, cidX), y: cidY, size: idSize, font, color: rgb(0.5, 0.5, 0.5) });
   }
 
@@ -336,10 +254,10 @@ export const generateCertificatePDF = async (
     const qrImageBytes = Uint8Array.from(atob(qrDataUrl.split(",")[1]), (c) => c.charCodeAt(0));
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     const qrSize = 80;
-    const qrXPct = toggles?.qrCodeX ?? 90;
-    const qrYPct = toggles?.qrCodeY ?? 90;
-    const qrX = (qrXPct / 100) * config.width - qrSize / 2;
-    const qrY = config.height - (qrYPct / 100) * config.height - qrSize / 2;
+    const qrXPct = (toggles?.qrCodeX ?? 90) / 100;
+    const qrYPct = (toggles?.qrCodeY ?? 90) / 100;
+    const qrX = qrXPct * config.width - qrSize / 2;
+    const qrY = config.height - qrYPct * config.height - qrSize / 2;
     page.drawImage(qrImage, { x: qrX, y: qrY, width: qrSize, height: qrSize });
 
     const scanText = "Scan to verify";
@@ -349,11 +267,9 @@ export const generateCertificatePDF = async (
 
   // Organization name
   if (showOrg && config.organizationName) {
-    const orgXPct = toggles?.orgNameX ?? 10;
-    const orgYPct = toggles?.orgNameY ?? 90;
     const orgNameWidth = fontBold.widthOfTextAtSize(config.organizationName, 10);
-    const orgX = (orgXPct / 100) * config.width - orgNameWidth / 2;
-    const orgY = config.height - (orgYPct / 100) * config.height;
+    const orgX = computePdfTextX(config.width, toggles?.orgNameX ?? 10, orgNameWidth, "center");
+    const orgY = computePdfBaselineY(config.height, toggles?.orgNameY ?? 90, 10, 1, 0);
     page.drawText(config.organizationName, { x: Math.max(10, orgX), y: orgY, size: 10, font: fontBold, color: rgb(0.1, 0.15, 0.25) });
     if (!assets?.signatureUrl && !assets?.backgroundUrl) {
       page.drawLine({ start: { x: orgX, y: orgY + 15 }, end: { x: orgX + fontBold.widthOfTextAtSize(config.organizationName, 10), y: orgY + 15 }, thickness: 0.5, color: rgb(0.3, 0.3, 0.3) });
