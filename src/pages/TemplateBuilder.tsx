@@ -29,6 +29,7 @@ interface FieldItem {
   yPosition: number;
   fontSize: number;
   fontColor: string;
+  fontWeight: string;
   textAlign: string;
   maxWidth: number | null;
 }
@@ -44,9 +45,9 @@ interface AssetSize {
 }
 
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
-  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", textAlign: "center", maxWidth: 600 },
-  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", textAlign: "center", maxWidth: 500 },
-  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", textAlign: "center", maxWidth: 300 },
+  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", maxWidth: 600 },
+  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", maxWidth: 500 },
+  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", maxWidth: 300 },
 ];
 
 type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
@@ -170,6 +171,7 @@ const TemplateBuilder = () => {
           yPosition: Number(f.y_position),
           fontSize: f.font_size,
           fontColor: f.font_color,
+          fontWeight: f.font_weight || "normal",
           textAlign: f.text_align,
           maxWidth: f.max_width,
         }));
@@ -292,6 +294,7 @@ const TemplateBuilder = () => {
       yPosition: 50,
       fontSize: 16,
       fontColor: "#333333",
+      fontWeight: "normal",
       textAlign: "center",
       maxWidth: null,
     };
@@ -390,6 +393,7 @@ const TemplateBuilder = () => {
         y_position: f.yPosition,
         font_size: f.fontSize,
         font_color: f.fontColor,
+        font_weight: f.fontWeight,
         text_align: f.textAlign,
         max_width: f.maxWidth,
         sort_order: i,
@@ -624,6 +628,7 @@ const TemplateBuilder = () => {
                   top: `${field.yPosition}%`,
                   transform: "translate(-50%, -50%)",
                   fontSize: field.fontSize,
+                  fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
                   color: field.fontColor,
                   textAlign: field.textAlign as any,
                   maxWidth: field.maxWidth || undefined,
@@ -727,6 +732,14 @@ const TemplateBuilder = () => {
                   <div className="space-y-1">
                     <Label className="text-xs">Y (%)</Label>
                     <Input type="number" value={Math.round(selectedFieldData.yPosition)} onChange={(e) => updateField(selectedFieldData.id, { yPosition: Number(e.target.value) })} className="h-8 text-sm" min={0} max={100} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Bold</Label>
+                  <div className="flex gap-1">
+                    {["normal", "bold"].map((w) => (
+                      <Button key={w} variant={selectedFieldData.fontWeight === w ? "default" : "outline"} size="sm" className="flex-1 h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { fontWeight: w })}>{w}</Button>
+                    ))}
                   </div>
                 </div>
                 <div className="space-y-1">

@@ -251,6 +251,7 @@ export type Database = {
           font_color: string
           font_family: string
           font_size: number
+          font_weight: string
           id: string
           label: string
           max_width: number | null
@@ -266,6 +267,7 @@ export type Database = {
           font_color?: string
           font_family?: string
           font_size?: number
+          font_weight?: string
           id?: string
           label: string
           max_width?: number | null
@@ -281,6 +283,7 @@ export type Database = {
           font_color?: string
           font_family?: string
           font_size?: number
+          font_weight?: string
           id?: string
           label?: string
           max_width?: number | null

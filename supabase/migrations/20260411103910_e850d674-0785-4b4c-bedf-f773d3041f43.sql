@@ -1,0 +1,1 @@
+ALTER TABLE public.template_fields ADD COLUMN font_weight text NOT NULL DEFAULT 'normal';
