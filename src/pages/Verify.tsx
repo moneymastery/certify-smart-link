@@ -82,13 +82,17 @@ const Verify = () => {
     // Get org branding (skip if using fallback — branding may be embedded)
     if (!usedFallback) {
       try {
-        const { data: brandingData } = await supabase.rpc("get_org_branding_for_certificate", {
+        const { data: brandingData, error: brandingError } = await supabase.rpc("get_org_branding_for_certificate", {
           _cert_id: cert.id,
         });
+        if (brandingError) {
+          console.error("Branding fetch error:", brandingError);
+        }
         const b = Array.isArray(brandingData) ? brandingData[0] : brandingData;
         if (b) setBranding(b as OrgBranding);
-      } catch {
-        // Branding fetch failed, continue with defaults
+        else console.warn("No branding returned for cert", cert.id);
+      } catch (e) {
+        console.error("Branding fetch exception:", e);
       }
 
       // Log verification
