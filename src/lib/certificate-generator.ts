@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import {
   LINE_HEIGHT_RATIO,
   resolveFieldValue,
+  sanitizeText,
   computeCoverDimensions,
   computePdfBaselineY,
   computePdfTextX,
@@ -239,7 +240,7 @@ export const generateCertificatePDF = async (
 
   // Certificate ID
   if (showCertId) {
-    const idText = `Certificate ID: ${data.serialNumber}`;
+    const idText = `Certificate ID: ${sanitizeText(data.serialNumber)}`;
     const idSize = 9;
     const idWidth = font.widthOfTextAtSize(idText, idSize);
     const cidX = computePdfTextX(config.width, toggles?.certIdX ?? 50, idWidth, "center");

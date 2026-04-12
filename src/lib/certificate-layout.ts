@@ -15,6 +15,14 @@ export const LINE_HEIGHT_RATIO = 1.3;
  */
 const ASCENT_RATIO = 0.75; // slightly rounded for cross-browser safety
 
+// ── Text sanitisation ────────────────────────────────────────────
+/**
+ * Strip control characters (newlines, tabs, etc.) that WinAnsi / pdf-lib
+ * cannot encode.  Collapses runs of whitespace into a single space.
+ */
+export const sanitizeText = (text: string): string =>
+  text?.replace(/[\r\n\x00-\x1F\x7F-\x9F]+/g, " ").replace(/\s{2,}/g, " ").trim() || "";
+
 // ── Field value resolution ────────────────────────────────────────
 export interface FieldDescriptor {
   fieldKey: string;
@@ -35,7 +43,7 @@ export const resolveFieldValue = (
   data: RecipientDescriptor
 ): string => {
   if (field.fieldKey === "recipient_name") {
-    return data.recipientName && data.recipientName !== "Unknown"
+    const raw = data.recipientName && data.recipientName !== "Unknown"
       ? data.recipientName
       : data.recipientData["recipient_name"] ||
         data.recipientData["name"] ||
@@ -44,11 +52,12 @@ export const resolveFieldValue = (
           ([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org")
         )?.[1] ||
         "Unknown";
+    return sanitizeText(raw);
   }
 
   const isTemplateText = field.label.includes("{{");
   if (isTemplateText) {
-    return field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+    const result = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
       const k = key.trim();
       return (
         data.recipientData[k] ||
@@ -58,15 +67,16 @@ export const resolveFieldValue = (
         ""
       );
     });
+    return sanitizeText(result);
   }
 
-  return (
+  const raw =
     data.recipientData[field.fieldKey] ||
     Object.entries(data.recipientData).find(
       ([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase()
     )?.[1] ||
-    ""
-  );
+    "";
+  return sanitizeText(raw);
 };
 
 // ── Background "cover" scaling ────────────────────────────────────
