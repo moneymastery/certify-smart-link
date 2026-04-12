@@ -57,7 +57,7 @@ export const resolveFieldValue = (
 
   const isTemplateText = field.label.includes("{{");
   if (isTemplateText) {
-    return field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+    const result = field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
       const k = key.trim();
       return (
         data.recipientData[k] ||
@@ -67,6 +67,7 @@ export const resolveFieldValue = (
         ""
       );
     });
+    return sanitizeText(result);
   }
 
   const raw =
