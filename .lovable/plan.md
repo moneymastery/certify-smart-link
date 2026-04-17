@@ -1,59 +1,37 @@
 
 
-# Root Cause Analysis and Fix Plan
+# CertifyPro — User POV Analysis (Read-Only, No DB Changes)
 
-## The Real Problem
+## Scope
+Analyze the live app from a real user's perspective across the core flows: onboarding → template building → CSV upload → certificate generation → distribution → verification. Identify friction, confusion, and bugs **without** any database/schema changes. All recommendations are frontend-only or copy/UX changes.
 
-The preview and PDF will **never** align perfectly with the current dual-renderer approach because:
+## Method
+1. Walk each route as if I were a first-time admin (`/login`, `/dashboard`, `/templates/new`, `/generate`, `/verify/:token`).
+2. Read the corresponding components/pages to spot:
+   - Confusing labels, missing empty states, dead-ends
+   - Loading/error states (or lack thereof)
+   - Mobile responsiveness at 904px and below
+   - Accessibility (focus states, alt text, keyboard nav)
+   - Performance hot-spots (batch generation, large CSVs)
+   - Production safety (silent failures, ambiguous toasts)
+3. Cross-reference with memory notes (`features/generation-flow`, `features/dashboard`, `verification/logic`, `style/design-direction`) to confirm intended UX.
+4. Produce a prioritized findings report — **P0 (broken/blocking)**, **P1 (confusing)**, **P2 (polish)** — each with the exact file + a one-line frontend fix.
 
-1. **Preview** uses CSS (`translate(-50%, -50%)`, browser font metrics, system fonts like Arial)
-2. **PDF** uses pdf-lib (`computePdfBaselineY` with an approximate ASCENT_RATIO, Helvetica font metrics)
+## Deliverable
+A single structured report in chat covering:
 
-These are two completely different rendering engines trying to produce the same output via shared math constants. Every field position depends on font metrics that differ between the browser and Helvetica. The `ASCENT_RATIO = 0.75` is a best-guess constant that can never be exact across all font sizes, text lengths, and screen configurations.
+- **Onboarding & Auth** — first-run org bootstrap, Google sign-in clarity
+- **Dashboard** — empty states, search affordance, batch status visibility
+- **Template Builder** — drag accuracy, asset upload feedback, save confirmation
+- **Generate flow** — CSV mapping clarity, progress feedback, error surfacing (the WinAnsi-style failures users saw recently)
+- **Distribution** — ZIP download UX, per-cert download, email status
+- **Verification page** — mobile readability, "Invalid" vs "Revoked" copy, org-name fallback behavior
+- **Cross-cutting** — toast consistency, loading skeletons, error boundary copy, mobile breakpoints
 
-**No amount of tweaking constants will fully fix this.** It's a fundamental architectural problem.
+Each finding includes: severity, user impact, file location, and a frontend-only fix suggestion. No code is written in this plan step — once you approve, I'll implement the P0/P1 fixes you pick.
 
-## The Solution: HTML-to-Image PDF Generation
-
-Eliminate the dual-renderer entirely. Render the HTML preview to a canvas image using `html2canvas`, then embed that single image as the PDF page. This is:
-
-- **Simpler code** — removes `computePdfBaselineY`, `computePdfTextX`, `wrapText` from the PDF path entirely
-- **100% match** — the PDF is literally a screenshot of the preview
-- **Zero future alignment bugs** — one renderer, one output
-- **No database changes** needed
-
-### Trade-off
-- Text in the PDF becomes non-selectable (it's an image). For certificates, this is perfectly acceptable — they're visual documents, not text documents.
-- QR codes still work because they're rendered in the preview HTML.
-
-## Files to Change
-
-### 1. `src/lib/certificate-generator.ts` — Replace PDF-drawing logic with html2canvas approach
-- Create an offscreen DOM element matching the certificate canvas dimensions
-- Render it using the same HTML/CSS as `CertificatePreview` (including real QR code, actual cert ID, org name)
-- Capture with `html2canvas` → convert to PNG → embed in pdf-lib page
-- Keep the existing `generateCertificatePDF` function signature so nothing else changes
-
-### 2. Install `html2canvas` package
-
-### 3. `src/components/CertificatePreview.tsx` — Extract the rendering HTML into a reusable function
-- Create a `renderCertificateHTML(container, props)` function that populates a DOM element with the certificate layout
-- Both the React preview component and the PDF generator call this same function
-
-### 4. `src/lib/certificate-layout.ts` — Keep shared utilities
-- `resolveFieldValue`, `sanitizeText`, `LINE_HEIGHT_RATIO` stay (used by the HTML renderer)
-- `computePdfBaselineY`, `computePdfTextX` become unused and can be removed
-
-## Summary
-
-```text
-Before:  Preview (CSS) ──┐     ┌── PDF (pdf-lib math)
-                          ├─ MISMATCH
-         Shared layout ───┘     └── Approximation errors
-
-After:   Preview (CSS) ──── html2canvas ──── PDF (embedded image)
-                              100% match
-```
-
-One renderer. One output. No alignment bugs. No database changes. Production-safe.
+## Out of Scope (per your constraint)
+- No database migrations, RLS changes, RPC edits, or storage policy changes.
+- No changes to existing certificate records, tokens, or verification URLs.
+- No backend/edge function changes that would alter contracts already in production.
 
