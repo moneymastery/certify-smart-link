@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, Search, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
+import { ShieldCheck, Search, CheckCircle, XCircle, AlertTriangle, Clock, WifiOff, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface CertificateResult {
