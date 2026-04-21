@@ -36,21 +36,31 @@ const Verify = () => {
 
     let cert: any = null;
     let usedFallback = false;
+    let primaryNetworkFailed = false;
+    let fallbackNetworkFailed = false;
+    let primaryReturnedNotFound = false;
 
     try {
       const { data, error } = await supabase.rpc("verify_certificate_by_token", {
         _token: token,
       });
 
-      const result = Array.isArray(data) ? data[0] : data;
-      if (!error && result) {
-        cert = result;
+      if (error) {
+        // Distinguish "no rows" from real failure. Supabase RPC returns empty array for no match.
+        primaryNetworkFailed = true;
+      } else {
+        const result = Array.isArray(data) ? data[0] : data;
+        if (result) {
+          cert = result;
+        } else {
+          primaryReturnedNotFound = true;
+        }
       }
     } catch {
-      // Primary API unreachable — will try fallback
+      primaryNetworkFailed = true;
     }
 
-    // Static fallback: if primary failed, try GitHub-hosted manifest
+    // Static fallback: try GitHub-hosted manifest
     if (!cert) {
       try {
         const fallbackUrl = `${window.location.origin}/certificates-manifest.json`;
@@ -64,14 +74,20 @@ const Verify = () => {
             cert = match;
             usedFallback = true;
           }
+        } else {
+          fallbackNetworkFailed = true;
         }
       } catch {
-        // Fallback also unavailable
+        fallbackNetworkFailed = true;
       }
     }
 
     if (!cert) {
-      setStatus("not-found");
+      // If primary confirmed "not found" OR fallback succeeded but had no match, it's truly invalid.
+      // Otherwise both lookups failed due to network — show network error.
+      const trulyNotFound = primaryReturnedNotFound && !fallbackNetworkFailed;
+      const allNetworkFailed = primaryNetworkFailed && fallbackNetworkFailed;
+      setStatus(allNetworkFailed && !trulyNotFound ? "network-error" : "not-found");
       setCertificate(null);
       setBranding(null);
       return;
