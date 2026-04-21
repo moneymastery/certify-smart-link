@@ -27,7 +27,7 @@ const Verify = () => {
   const [query, setQuery] = useState(tokenFromUrl || "");
   const [certificate, setCertificate] = useState<CertificateResult | null>(null);
   const [branding, setBranding] = useState<OrgBranding | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "found" | "not-found">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "found" | "not-found" | "network-error">("idle");
 
   const handleVerify = async (searchToken?: string) => {
     const token = searchToken || query.trim();
