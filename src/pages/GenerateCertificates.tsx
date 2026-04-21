@@ -465,6 +465,46 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </p>
             </div>
 
+            {autoMapStats && autoMapStats.total > 0 && (() => {
+              const pct = autoMapStats.matched / autoMapStats.total;
+              const isGood = pct === 1;
+              const isPartial = pct > 0 && pct < 1;
+              const isNone = pct === 0;
+              return (
+                <div
+                  className={cn(
+                    "rounded-lg border p-3 flex items-start gap-3",
+                    isGood && "border-accent/30 bg-accent/5",
+                    isPartial && "border-amber-500/30 bg-amber-500/5",
+                    isNone && "border-destructive/30 bg-destructive/5"
+                  )}
+                >
+                  {isGood ? (
+                    <CheckCircle className="h-4 w-4 mt-0.5 text-accent shrink-0" />
+                  ) : (
+                    <AlertCircle
+                      className={cn(
+                        "h-4 w-4 mt-0.5 shrink-0",
+                        isPartial ? "text-amber-600" : "text-destructive"
+                      )}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {isGood
+                        ? `All ${autoMapStats.total} template field${autoMapStats.total === 1 ? "" : "s"} auto-matched to your file.`
+                        : `${autoMapStats.matched} of ${autoMapStats.total} fields auto-matched.`}
+                    </p>
+                    {!isGood && autoMapStats.unmatched.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Please map manually: <span className="font-medium text-foreground">{autoMapStats.unmatched.join(", ")}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {templates.length > 0 && (
               <div className="space-y-2">
                 <Label>Certificate Template</Label>
