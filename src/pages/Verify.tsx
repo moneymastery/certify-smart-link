@@ -356,4 +356,22 @@ const NotFoundCard = () => (
   </div>
 );
 
+const NetworkErrorCard = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-6 animate-fade-up">
+    <div className="flex flex-col items-center">
+      <div className="h-14 w-14 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center mb-3">
+        <WifiOff className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+      </div>
+      <h3 className="font-heading text-lg font-bold text-foreground">Connection Problem</h3>
+      <p className="mt-2 text-sm text-muted-foreground text-center">
+        We couldn't reach our verification service. This doesn't mean the certificate is invalid — please check your connection and try again.
+      </p>
+      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+        <RefreshCw className="h-3.5 w-3.5" />
+        Retry
+      </Button>
+    </div>
+  </div>
+);
+
 export default Verify;
