@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldCheck, Search, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
+import { ShieldCheck, Search, CheckCircle, XCircle, AlertTriangle, Clock, WifiOff, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface CertificateResult {
@@ -27,7 +27,7 @@ const Verify = () => {
   const [query, setQuery] = useState(tokenFromUrl || "");
   const [certificate, setCertificate] = useState<CertificateResult | null>(null);
   const [branding, setBranding] = useState<OrgBranding | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "found" | "not-found">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "found" | "not-found" | "network-error">("idle");
 
   const handleVerify = async (searchToken?: string) => {
     const token = searchToken || query.trim();
@@ -36,21 +36,31 @@ const Verify = () => {
 
     let cert: any = null;
     let usedFallback = false;
+    let primaryNetworkFailed = false;
+    let fallbackNetworkFailed = false;
+    let primaryReturnedNotFound = false;
 
     try {
       const { data, error } = await supabase.rpc("verify_certificate_by_token", {
         _token: token,
       });
 
-      const result = Array.isArray(data) ? data[0] : data;
-      if (!error && result) {
-        cert = result;
+      if (error) {
+        // Distinguish "no rows" from real failure. Supabase RPC returns empty array for no match.
+        primaryNetworkFailed = true;
+      } else {
+        const result = Array.isArray(data) ? data[0] : data;
+        if (result) {
+          cert = result;
+        } else {
+          primaryReturnedNotFound = true;
+        }
       }
     } catch {
-      // Primary API unreachable — will try fallback
+      primaryNetworkFailed = true;
     }
 
-    // Static fallback: if primary failed, try GitHub-hosted manifest
+    // Static fallback: try GitHub-hosted manifest
     if (!cert) {
       try {
         const fallbackUrl = `${window.location.origin}/certificates-manifest.json`;
@@ -64,14 +74,20 @@ const Verify = () => {
             cert = match;
             usedFallback = true;
           }
+        } else {
+          fallbackNetworkFailed = true;
         }
       } catch {
-        // Fallback also unavailable
+        fallbackNetworkFailed = true;
       }
     }
 
     if (!cert) {
-      setStatus("not-found");
+      // If primary confirmed "not found" OR fallback succeeded but had no match, it's truly invalid.
+      // Otherwise both lookups failed due to network — show network error.
+      const trulyNotFound = primaryReturnedNotFound && !fallbackNetworkFailed;
+      const allNetworkFailed = primaryNetworkFailed && fallbackNetworkFailed;
+      setStatus(allNetworkFailed && !trulyNotFound ? "network-error" : "not-found");
       setCertificate(null);
       setBranding(null);
       return;
@@ -209,6 +225,9 @@ const Verify = () => {
           {/* ❌ Not found */}
           {status === "not-found" && <NotFoundCard />}
 
+          {/* 📡 Network error */}
+          {status === "network-error" && <NetworkErrorCard onRetry={() => handleVerify()} />}
+
           {/* Footer */}
           <p className="text-center text-xs text-muted-foreground pt-4">
             {branding ? (
@@ -333,6 +352,24 @@ const NotFoundCard = () => (
       <p className="mt-2 text-sm text-muted-foreground text-center">
         No certificate matches this ID. Please check and try again.
       </p>
+    </div>
+  </div>
+);
+
+const NetworkErrorCard = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-6 animate-fade-up">
+    <div className="flex flex-col items-center">
+      <div className="h-14 w-14 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center mb-3">
+        <WifiOff className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+      </div>
+      <h3 className="font-heading text-lg font-bold text-foreground">Connection Problem</h3>
+      <p className="mt-2 text-sm text-muted-foreground text-center">
+        We couldn't reach our verification service. This doesn't mean the certificate is invalid — please check your connection and try again.
+      </p>
+      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+        <RefreshCw className="h-3.5 w-3.5" />
+        Retry
+      </Button>
     </div>
   </div>
 );
