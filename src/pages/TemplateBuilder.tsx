@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LINE_HEIGHT_RATIO } from "@/lib/certificate-layout";
+import { LINE_HEIGHT_RATIO, getTextAnchorTransform } from "@/lib/certificate-layout";
 
 interface FieldItem {
   id: string;
@@ -627,7 +627,7 @@ const TemplateBuilder = () => {
                 style={{
                   left: `${field.xPosition}%`,
                   top: `${field.yPosition}%`,
-                  transform: "translate(-50%, -50%)",
+                  transform: getTextAnchorTransform(field.textAlign),
                   fontSize: field.fontSize,
                   lineHeight: LINE_HEIGHT_RATIO,
                   fontWeight: field.fontWeight === "bold" ? "bold" : "normal",

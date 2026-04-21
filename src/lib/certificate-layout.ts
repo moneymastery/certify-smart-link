@@ -15,6 +15,17 @@ export const LINE_HEIGHT_RATIO = 1.3;
  */
 const ASCENT_RATIO = 0.75; // slightly rounded for cross-browser safety
 
+export const getTextAnchorTransform = (textAlign: string | null | undefined): string => {
+  switch (textAlign) {
+    case "right":
+      return "translate(-100%, -50%)";
+    case "center":
+      return "translate(-50%, -50%)";
+    default:
+      return "translate(0, -50%)";
+  }
+};
+
 // ── Text sanitisation ────────────────────────────────────────────
 /**
  * Strip control characters (newlines, tabs, etc.) that WinAnsi / pdf-lib
