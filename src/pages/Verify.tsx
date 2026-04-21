@@ -225,6 +225,9 @@ const Verify = () => {
           {/* ❌ Not found */}
           {status === "not-found" && <NotFoundCard />}
 
+          {/* 📡 Network error */}
+          {status === "network-error" && <NetworkErrorCard onRetry={() => handleVerify()} />}
+
           {/* Footer */}
           <p className="text-center text-xs text-muted-foreground pt-4">
             {branding ? (
