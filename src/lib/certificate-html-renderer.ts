@@ -5,7 +5,7 @@
  * resulting DOM with html2canvas to guarantee pixel-perfect parity.
  */
 import QRCode from "qrcode";
-import { resolveFieldValue, LINE_HEIGHT_RATIO, sanitizeText } from "./certificate-layout";
+import { resolveFieldValue, LINE_HEIGHT_RATIO, sanitizeText, getTextAnchorTransform } from "./certificate-layout";
 
 export interface RenderField {
   id?: string;
@@ -92,15 +92,16 @@ export const renderCertificateInto = (container: HTMLElement, opts: RenderOption
     const value = resolveFieldValue({ fieldKey: f.field_key, label: f.label }, data);
     if (!value) continue;
     const isTemplateText = f.label?.includes("{{");
+    const textAlign = (f.text_align as any) || "left";
     const el = absDiv({
       left: `${Number(f.x_position)}%`,
       top: `${Number(f.y_position)}%`,
-      transform: "translate(-50%, -50%)",
+      transform: getTextAnchorTransform(textAlign),
       fontSize: `${f.font_size}px`,
       lineHeight: String(LINE_HEIGHT_RATIO),
       fontWeight: f.font_weight || "normal",
       color: f.font_color || "#000",
-      textAlign: (f.text_align as any) || "left",
+      textAlign,
       maxWidth: f.max_width ? `${f.max_width}px` : "",
       whiteSpace: isTemplateText ? "normal" : "nowrap",
       wordBreak: isTemplateText ? "break-word" : "normal",
