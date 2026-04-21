@@ -189,22 +189,32 @@ const GenerateCertificates = () => {
       if (data && csvHeaders.length > 0) {
         const autoMap: Record<string, string> = {};
         const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
+        const targets: { key: string; label: string }[] = [];
         for (const f of data) {
-          const match = csvHeaders.find((h) => normalize(h) === normalize(f.field_key));
-          if (match) autoMap[f.field_key] = match;
-        }
-        // Also auto-map placeholder variable names
-        for (const f of data) {
+          if (f.field_key === "recipient_name") continue;
+          if (!f.label.includes("{{")) {
+            targets.push({ key: f.field_key, label: f.label });
+          }
           const matches = f.label.matchAll(/\{\{(\w+)\}\}/g);
           for (const m of matches) {
-            const varName = m[1];
-            if (!autoMap[varName]) {
-              const match = csvHeaders.find((h) => normalize(h) === normalize(varName));
-              if (match) autoMap[varName] = match;
-            }
+            targets.push({ key: m[1], label: `{{${m[1]}}}` });
           }
         }
+        const unmatched: string[] = [];
+        for (const t of targets) {
+          if (autoMap[t.key]) continue;
+          const match = csvHeaders.find((h) => normalize(h) === normalize(t.key));
+          if (match) autoMap[t.key] = match;
+          else unmatched.push(t.label);
+        }
         setFieldMapping(autoMap);
+        setAutoMapStats({
+          matched: Object.keys(autoMap).length,
+          total: targets.length,
+          unmatched,
+        });
+      } else {
+        setAutoMapStats(null);
       }
     };
     loadFields();
