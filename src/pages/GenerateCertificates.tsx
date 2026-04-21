@@ -135,6 +135,7 @@ const GenerateCertificates = () => {
   }, [user]);
 
   const [templateFields, setTemplateFields] = useState<{ field_key: string; label: string }[]>([]);
+  const [autoMapStats, setAutoMapStats] = useState<{ matched: number; total: number; unmatched: string[] } | null>(null);
 
   // Extract {{placeholder}} variable names from template text fields
   const placeholderVars = useMemo(() => {
