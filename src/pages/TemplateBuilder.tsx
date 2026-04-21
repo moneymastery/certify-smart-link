@@ -615,30 +615,60 @@ const TemplateBuilder = () => {
             )}
 
             {/* Draggable fields */}
-            {fields.map((field) => (
-              <div
-                key={field.id}
-                onPointerDown={(e) => handlePointerDown(field.id, e)}
-                className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow touch-none ${
-                  selectedField === field.id
-                    ? "ring-2 ring-accent ring-offset-1 shadow-md"
-                    : "hover:ring-1 hover:ring-border"
-                }`}
-                style={{
-                  left: `${field.xPosition}%`,
-                  top: `${field.yPosition}%`,
-                  transform: getTextAnchorTransform(field.textAlign),
-                  fontSize: field.fontSize,
-                  lineHeight: LINE_HEIGHT_RATIO,
-                  fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
-                  color: field.fontColor,
-                  textAlign: field.textAlign as any,
-                  maxWidth: field.maxWidth || undefined,
-                }}
-              >
-                {`{{${field.fieldKey}}}`}
-              </div>
-            ))}
+            {fields.map((field) => {
+              const isSelected = selectedField === field.id;
+              const align = (field.textAlign || "left") as "left" | "center" | "right";
+              const anchorLabel = align === "left" ? "Pinned left" : align === "right" ? "Pinned right" : "Pinned center";
+              return (
+                <div key={field.id}>
+                  <div
+                    onPointerDown={(e) => handlePointerDown(field.id, e)}
+                    className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow touch-none ${
+                      isSelected
+                        ? "ring-2 ring-accent ring-offset-1 shadow-md"
+                        : "hover:ring-1 hover:ring-border"
+                    }`}
+                    style={{
+                      left: `${field.xPosition}%`,
+                      top: `${field.yPosition}%`,
+                      transform: getTextAnchorTransform(field.textAlign),
+                      fontSize: field.fontSize,
+                      lineHeight: LINE_HEIGHT_RATIO,
+                      fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
+                      color: field.fontColor,
+                      textAlign: align,
+                      maxWidth: field.maxWidth || undefined,
+                    }}
+                  >
+                    {`{{${field.fieldKey}}}`}
+                  </div>
+
+                  {isSelected && (
+                    <>
+                      <div
+                        className="absolute pointer-events-none bg-accent/40"
+                        style={{ left: `${field.xPosition}%`, top: 0, width: "1px", height: "100%", transform: "translateX(-0.5px)" }}
+                      />
+                      <div
+                        className="absolute pointer-events-none bg-accent/40"
+                        style={{ left: 0, top: `${field.yPosition}%`, width: "100%", height: "1px", transform: "translateY(-0.5px)" }}
+                      />
+                      <div
+                        className="absolute pointer-events-none rounded-full bg-accent ring-2 ring-background shadow"
+                        style={{ left: `${field.xPosition}%`, top: `${field.yPosition}%`, width: "10px", height: "10px", transform: "translate(-50%, -50%)" }}
+                      />
+                      <div
+                        className="absolute pointer-events-none px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent text-accent-foreground whitespace-nowrap shadow"
+                        style={{ left: `${field.xPosition}%`, top: `${field.yPosition}%`, transform: "translate(8px, -140%)" }}
+                      >
+                        {anchorLabel}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
 
             {/* Empty state */}
             {!backgroundUrl && fields.length === 0 && (
