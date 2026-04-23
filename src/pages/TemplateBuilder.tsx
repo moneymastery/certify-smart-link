@@ -504,6 +504,7 @@ const TemplateBuilder = () => {
               backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
               backgroundSize: "cover",
               backgroundPosition: "center",
+              fontFamily: "Arial, Helvetica, sans-serif",
             }}
           >
             {/* Logo overlay — draggable */}
