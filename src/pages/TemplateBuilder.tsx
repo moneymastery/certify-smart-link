@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LINE_HEIGHT_RATIO, getTextAnchorTransform } from "@/lib/certificate-layout";
+import { LINE_HEIGHT_RATIO, getTextAnchorTransform, getTextAnchorTop } from "@/lib/certificate-layout";
 
 interface FieldItem {
   id: string;
@@ -32,6 +32,7 @@ interface FieldItem {
   fontColor: string;
   fontWeight: string;
   textAlign: string;
+  verticalAlign: "top" | "middle" | "bottom" | "baseline";
   maxWidth: number | null;
 }
 
@@ -46,10 +47,17 @@ interface AssetSize {
 }
 
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
-  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", maxWidth: 600 },
-  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", maxWidth: 500 },
-  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", maxWidth: 300 },
+  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", verticalAlign: "middle", maxWidth: 600 },
+  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", verticalAlign: "middle", maxWidth: 500 },
+  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", verticalAlign: "middle", maxWidth: 300 },
 ];
+
+const sampleFieldValue = (field: FieldItem) => {
+  const sample = field.label.includes("{{")
+    ? field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => String(key).trim().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+    : field.label || field.fieldKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return sample || `{{${field.fieldKey}}}`;
+};
 
 type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
 
