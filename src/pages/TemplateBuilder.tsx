@@ -531,6 +531,8 @@ const TemplateBuilder = () => {
                   left: `${logoPos.x}%`,
                   top: `${logoPos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: logoSize.width > 0 ? `${logoSize.width}px` : "auto",
+                  height: logoSize.height > 0 ? `${logoSize.height}px` : "50px",
                 }}
                 draggable={false}
               />
@@ -549,6 +551,8 @@ const TemplateBuilder = () => {
                   left: `${signaturePos.x}%`,
                   top: `${signaturePos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: signatureSize.width > 0 ? `${signatureSize.width}px` : "auto",
+                  height: signatureSize.height > 0 ? `${signatureSize.height}px` : "40px",
                 }}
                 draggable={false}
               />
@@ -567,6 +571,8 @@ const TemplateBuilder = () => {
                   left: `${sealPos.x}%`,
                   top: `${sealPos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: sealSize.width > 0 ? `${sealSize.width}px` : "auto",
+                  height: sealSize.height > 0 ? `${sealSize.height}px` : "60px",
                 }}
                 draggable={false}
               />
