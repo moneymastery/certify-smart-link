@@ -305,6 +305,7 @@ const GenerateCertificates = () => {
         fontColor: f.font_color,
         fontWeight: f.font_weight || "normal",
         textAlign: f.text_align as "left" | "center" | "right",
+        verticalAlign: (f.vertical_align || "middle") as "top" | "middle" | "bottom" | "baseline",
         maxWidth: f.max_width ?? undefined,
       }));
 
