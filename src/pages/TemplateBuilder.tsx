@@ -636,20 +636,16 @@ const TemplateBuilder = () => {
             {fields.map((field) => {
               const isSelected = selectedField === field.id;
               const align = (field.textAlign || "left") as "left" | "center" | "right";
-              const anchorLabel = align === "left" ? "Pinned left" : align === "right" ? "Pinned right" : "Pinned center";
+              const anchorLabel = `Pinned ${align} / ${field.verticalAlign}`;
               return (
                 <div key={field.id}>
                   <div
                     onPointerDown={(e) => handlePointerDown(field.id, e)}
-                    className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow touch-none ${
-                      isSelected
-                        ? "ring-2 ring-accent ring-offset-1 shadow-md"
-                        : "hover:ring-1 hover:ring-border"
-                    }`}
+                    className="absolute cursor-move select-none touch-none"
                     style={{
                       left: `${field.xPosition}%`,
-                      top: `${field.yPosition}%`,
-                      transform: getTextAnchorTransform(field.textAlign),
+                      top: getTextAnchorTop(field.yPosition, field.fontSize, field.verticalAlign),
+                      transform: getTextAnchorTransform(field.textAlign, field.verticalAlign),
                       fontSize: field.fontSize,
                       lineHeight: LINE_HEIGHT_RATIO,
                       fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
@@ -658,7 +654,8 @@ const TemplateBuilder = () => {
                       maxWidth: field.maxWidth || undefined,
                     }}
                   >
-                    {`{{${field.fieldKey}}}`}
+                    {sampleFieldValue(field)}
+                    <span className={`absolute inset-0 rounded pointer-events-none transition-shadow ${isSelected ? "ring-2 ring-accent ring-offset-1 shadow-md" : "ring-0"}`} />
                   </div>
 
                   {isSelected && (
