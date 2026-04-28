@@ -652,6 +652,8 @@ const TemplateBuilder = () => {
                       color: field.fontColor,
                       textAlign: align,
                       maxWidth: field.maxWidth || undefined,
+                      whiteSpace: field.label.includes("{{") ? "normal" : "nowrap",
+                      wordBreak: field.label.includes("{{") ? "break-word" : "normal",
                     }}
                   >
                     {sampleFieldValue(field)}
