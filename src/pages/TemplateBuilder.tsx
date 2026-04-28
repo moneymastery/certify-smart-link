@@ -20,7 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { LINE_HEIGHT_RATIO, getTextAnchorTransform } from "@/lib/certificate-layout";
+import { LINE_HEIGHT_RATIO, getTextAnchorTransform, getTextAnchorTop } from "@/lib/certificate-layout";
 
 interface FieldItem {
   id: string;
@@ -32,6 +32,7 @@ interface FieldItem {
   fontColor: string;
   fontWeight: string;
   textAlign: string;
+  verticalAlign: "top" | "middle" | "bottom" | "baseline";
   maxWidth: number | null;
 }
 
@@ -46,10 +47,40 @@ interface AssetSize {
 }
 
 const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
-  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", maxWidth: 600 },
-  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", maxWidth: 500 },
-  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", maxWidth: 300 },
+  { fieldKey: "recipient_name", label: "Recipient Name", xPosition: 50, yPosition: 45, fontSize: 28, fontColor: "#1a1a2e", fontWeight: "bold", textAlign: "center", verticalAlign: "middle", maxWidth: 600 },
+  { fieldKey: "course", label: "Course Name", xPosition: 50, yPosition: 58, fontSize: 16, fontColor: "#444444", fontWeight: "normal", textAlign: "center", verticalAlign: "middle", maxWidth: 500 },
+  { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", verticalAlign: "middle", maxWidth: 300 },
 ];
+
+const SAMPLE_VALUES: Record<string, string> = {
+  recipient_name: "Bibak Kumar",
+  name: "Bibak Kumar",
+  full_name: "Bibak Kumar",
+  student_name: "Bibak Kumar",
+  father_name: "Rajendra Prasad Singh",
+  parent_name: "Rajendra Prasad Singh",
+  roll_no: "123060052",
+  roll_number: "123060052",
+  reg_no: "SBN/INTS/23-27/11014",
+  registration_no: "SBN/INTS/23-27/11014",
+  session: "2023-2027",
+  college: "R S COLLEGE TARAPUR, MUNGER",
+  course: "DATA ANALYTICS & REPORTING",
+  grade: "A",
+  company: "SUNITI AND SONS INFOTECH LLP",
+  organization: "SUNITI AND SONS INFOTECH LLP",
+  start_date: "23.02.2026",
+  end_date: "20.03.2026",
+  date: "23.02.2026 to 20.03.2026",
+};
+
+const sampleFieldValue = (field: FieldItem) => {
+  const sampleForKey = (key: string) => SAMPLE_VALUES[key.trim().toLowerCase()] || key.trim().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const sample = field.label.includes("{{")
+    ? field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => sampleForKey(String(key)))
+    : SAMPLE_VALUES[field.fieldKey.toLowerCase()] || field.label || sampleForKey(field.fieldKey);
+  return sample || `{{${field.fieldKey}}}`;
+};
 
 type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
 
@@ -174,6 +205,7 @@ const TemplateBuilder = () => {
           fontColor: f.font_color,
           fontWeight: f.font_weight || "normal",
           textAlign: f.text_align,
+          verticalAlign: f.vertical_align || "middle",
           maxWidth: f.max_width,
         }));
         if (loadedFields.length > 0) setFields(loadedFields);
@@ -297,6 +329,7 @@ const TemplateBuilder = () => {
       fontColor: "#333333",
       fontWeight: "normal",
       textAlign: "center",
+      verticalAlign: "middle",
       maxWidth: null,
     };
     setFields([...fields, newField]);
@@ -396,11 +429,12 @@ const TemplateBuilder = () => {
         font_color: f.fontColor,
         font_weight: f.fontWeight,
         text_align: f.textAlign,
+        vertical_align: f.verticalAlign,
         max_width: f.maxWidth,
         sort_order: i,
       }));
 
-      const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows);
+      const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows as any);
       if (fieldsErr) throw fieldsErr;
 
       toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
@@ -520,6 +554,8 @@ const TemplateBuilder = () => {
                   left: `${logoPos.x}%`,
                   top: `${logoPos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: logoSize.width > 0 ? `${logoSize.width}px` : "auto",
+                  height: logoSize.height > 0 ? `${logoSize.height}px` : "50px",
                 }}
                 draggable={false}
               />
@@ -538,6 +574,8 @@ const TemplateBuilder = () => {
                   left: `${signaturePos.x}%`,
                   top: `${signaturePos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: signatureSize.width > 0 ? `${signatureSize.width}px` : "auto",
+                  height: signatureSize.height > 0 ? `${signatureSize.height}px` : "40px",
                 }}
                 draggable={false}
               />
@@ -556,6 +594,8 @@ const TemplateBuilder = () => {
                   left: `${sealPos.x}%`,
                   top: `${sealPos.y}%`,
                   transform: "translate(-50%, -50%)",
+                  width: sealSize.width > 0 ? `${sealSize.width}px` : "auto",
+                  height: sealSize.height > 0 ? `${sealSize.height}px` : "60px",
                 }}
                 draggable={false}
               />
@@ -619,29 +659,28 @@ const TemplateBuilder = () => {
             {fields.map((field) => {
               const isSelected = selectedField === field.id;
               const align = (field.textAlign || "left") as "left" | "center" | "right";
-              const anchorLabel = align === "left" ? "Pinned left" : align === "right" ? "Pinned right" : "Pinned center";
+              const anchorLabel = `Pinned ${align} / ${field.verticalAlign}`;
               return (
                 <div key={field.id}>
                   <div
                     onPointerDown={(e) => handlePointerDown(field.id, e)}
-                    className={`absolute cursor-move select-none px-2 py-1 rounded transition-shadow touch-none ${
-                      isSelected
-                        ? "ring-2 ring-accent ring-offset-1 shadow-md"
-                        : "hover:ring-1 hover:ring-border"
-                    }`}
+                    className="absolute cursor-move select-none touch-none"
                     style={{
                       left: `${field.xPosition}%`,
-                      top: `${field.yPosition}%`,
-                      transform: getTextAnchorTransform(field.textAlign),
+                      top: getTextAnchorTop(field.yPosition, field.fontSize, field.verticalAlign),
+                      transform: getTextAnchorTransform(field.textAlign, field.verticalAlign),
                       fontSize: field.fontSize,
                       lineHeight: LINE_HEIGHT_RATIO,
                       fontWeight: field.fontWeight === "bold" ? "bold" : "normal",
                       color: field.fontColor,
                       textAlign: align,
                       maxWidth: field.maxWidth || undefined,
+                      whiteSpace: field.label.includes("{{") ? "normal" : "nowrap",
+                      wordBreak: field.label.includes("{{") ? "break-word" : "normal",
                     }}
                   >
-                    {`{{${field.fieldKey}}}`}
+                    {sampleFieldValue(field)}
+                    <span className={`absolute inset-0 rounded pointer-events-none transition-shadow ${isSelected ? "ring-2 ring-accent ring-offset-1 shadow-md" : "ring-0"}`} />
                   </div>
 
                   {isSelected && (
@@ -791,6 +830,14 @@ const TemplateBuilder = () => {
                   <div className="flex gap-1">
                     {["left", "center", "right"].map((a) => (
                       <Button key={a} variant={selectedFieldData.textAlign === a ? "default" : "outline"} size="sm" className="flex-1 h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { textAlign: a })}>{a}</Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Vertical Anchor</Label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {(["top", "middle", "bottom", "baseline"] as const).map((a) => (
+                      <Button key={a} variant={selectedFieldData.verticalAlign === a ? "default" : "outline"} size="sm" className="h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { verticalAlign: a })}>{a}</Button>
                     ))}
                   </div>
                 </div>
