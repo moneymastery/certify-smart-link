@@ -258,6 +258,7 @@ export type Database = {
           sort_order: number
           template_id: string
           text_align: string
+          vertical_align: string
           x_position: number
           y_position: number
         }
@@ -274,6 +275,7 @@ export type Database = {
           sort_order?: number
           template_id: string
           text_align?: string
+          vertical_align?: string
           x_position?: number
           y_position?: number
         }
@@ -290,6 +292,7 @@ export type Database = {
           sort_order?: number
           template_id?: string
           text_align?: string
+          vertical_align?: string
           x_position?: number
           y_position?: number
         }
