@@ -11,6 +11,7 @@ export interface PreviewField {
   font_color: string;
   font_weight: string;
   text_align: string;
+  vertical_align?: string | null;
   max_width: number | null;
 }
 
