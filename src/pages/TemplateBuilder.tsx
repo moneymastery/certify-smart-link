@@ -809,6 +809,14 @@ const TemplateBuilder = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-xs">Vertical Anchor</Label>
+                  <div className="grid grid-cols-2 gap-1">
+                    {(["top", "middle", "bottom", "baseline"] as const).map((a) => (
+                      <Button key={a} variant={selectedFieldData.verticalAlign === a ? "default" : "outline"} size="sm" className="h-7 text-xs capitalize" onClick={() => updateField(selectedFieldData.id, { verticalAlign: a })}>{a}</Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1">
                   <Label className="text-xs">Max Width (px)</Label>
                   <Input type="number" value={selectedFieldData.maxWidth || ""} onChange={(e) => updateField(selectedFieldData.id, { maxWidth: e.target.value ? Number(e.target.value) : null })} className="h-8 text-sm" placeholder="Auto" />
                 </div>
