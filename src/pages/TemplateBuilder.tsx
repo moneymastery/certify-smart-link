@@ -52,10 +52,33 @@ const DEFAULT_FIELDS: Omit<FieldItem, "id">[] = [
   { fieldKey: "date", label: "Date", xPosition: 50, yPosition: 70, fontSize: 14, fontColor: "#666666", fontWeight: "normal", textAlign: "center", verticalAlign: "middle", maxWidth: 300 },
 ];
 
+const SAMPLE_VALUES: Record<string, string> = {
+  recipient_name: "Bibak Kumar",
+  name: "Bibak Kumar",
+  full_name: "Bibak Kumar",
+  student_name: "Bibak Kumar",
+  father_name: "Rajendra Prasad Singh",
+  parent_name: "Rajendra Prasad Singh",
+  roll_no: "123060052",
+  roll_number: "123060052",
+  reg_no: "SBN/INTS/23-27/11014",
+  registration_no: "SBN/INTS/23-27/11014",
+  session: "2023-2027",
+  college: "R S COLLEGE TARAPUR, MUNGER",
+  course: "DATA ANALYTICS & REPORTING",
+  grade: "A",
+  company: "SUNITI AND SONS INFOTECH LLP",
+  organization: "SUNITI AND SONS INFOTECH LLP",
+  start_date: "23.02.2026",
+  end_date: "20.03.2026",
+  date: "23.02.2026 to 20.03.2026",
+};
+
 const sampleFieldValue = (field: FieldItem) => {
+  const sampleForKey = (key: string) => SAMPLE_VALUES[key.trim().toLowerCase()] || key.trim().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const sample = field.label.includes("{{")
-    ? field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => String(key).trim().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
-    : field.label || field.fieldKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    ? field.label.replace(/\{\{([^}]+)\}\}/g, (_, key) => sampleForKey(String(key)))
+    : SAMPLE_VALUES[field.fieldKey.toLowerCase()] || field.label || sampleForKey(field.fieldKey);
   return sample || `{{${field.fieldKey}}}`;
 };
 
