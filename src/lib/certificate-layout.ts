@@ -15,15 +15,48 @@ export const LINE_HEIGHT_RATIO = 1.3;
  */
 const ASCENT_RATIO = 0.75; // slightly rounded for cross-browser safety
 
-export const getTextAnchorTransform = (textAlign: string | null | undefined): string => {
+export type HorizontalTextAlign = "left" | "center" | "right";
+export type VerticalTextAlign = "top" | "middle" | "bottom" | "baseline";
+
+export const normalizeVerticalAlign = (verticalAlign: string | null | undefined): VerticalTextAlign => {
+  return verticalAlign === "top" || verticalAlign === "bottom" || verticalAlign === "baseline"
+    ? verticalAlign
+    : "middle";
+};
+
+export const getBaselineOffset = (fontSize: number): number => {
+  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+  return (lineHeight - fontSize) / 2 + fontSize * ASCENT_RATIO;
+};
+
+export const getTextAnchorTransform = (
+  textAlign: string | null | undefined,
+  verticalAlign: string | null | undefined = "middle"
+): string => {
+  const y = normalizeVerticalAlign(verticalAlign) === "middle"
+    ? "-50%"
+    : normalizeVerticalAlign(verticalAlign) === "bottom"
+      ? "-100%"
+      : "0";
   switch (textAlign) {
     case "right":
-      return "translate(-100%, -50%)";
+      return `translate(-100%, ${y})`;
     case "center":
-      return "translate(-50%, -50%)";
+      return `translate(-50%, ${y})`;
     default:
-      return "translate(0, -50%)";
+      return `translate(0, ${y})`;
   }
+};
+
+export const getTextAnchorTop = (
+  yPct: number,
+  fontSize: number,
+  verticalAlign: string | null | undefined = "middle"
+): string => {
+  if (normalizeVerticalAlign(verticalAlign) === "baseline") {
+    return `calc(${yPct}% - ${getBaselineOffset(fontSize)}px)`;
+  }
+  return `${yPct}%`;
 };
 
 // ── Text sanitisation ────────────────────────────────────────────
