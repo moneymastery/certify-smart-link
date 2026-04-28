@@ -434,7 +434,7 @@ const TemplateBuilder = () => {
         sort_order: i,
       }));
 
-      const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows);
+      const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows as any);
       if (fieldsErr) throw fieldsErr;
 
       toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
