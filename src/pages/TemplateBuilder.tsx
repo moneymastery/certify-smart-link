@@ -182,6 +182,7 @@ const TemplateBuilder = () => {
           fontColor: f.font_color,
           fontWeight: f.font_weight || "normal",
           textAlign: f.text_align,
+          verticalAlign: f.vertical_align || "middle",
           maxWidth: f.max_width,
         }));
         if (loadedFields.length > 0) setFields(loadedFields);
@@ -305,6 +306,7 @@ const TemplateBuilder = () => {
       fontColor: "#333333",
       fontWeight: "normal",
       textAlign: "center",
+      verticalAlign: "middle",
       maxWidth: null,
     };
     setFields([...fields, newField]);
