@@ -53,6 +53,7 @@ export interface GenerationConfig {
     fontColor: string;
     fontWeight: string;
     textAlign: "left" | "center" | "right";
+    verticalAlign?: "top" | "middle" | "bottom" | "baseline";
     maxWidth?: number;
   }[];
   assets?: TemplateAssets;
@@ -100,6 +101,7 @@ const toRenderFields = (cfg: GenerationConfig): RenderField[] =>
     font_color: f.fontColor,
     font_weight: f.fontWeight,
     text_align: f.textAlign,
+    vertical_align: f.verticalAlign ?? "middle",
     max_width: f.maxWidth ?? null,
   }));
 
