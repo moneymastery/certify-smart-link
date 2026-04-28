@@ -406,6 +406,7 @@ const TemplateBuilder = () => {
         font_color: f.fontColor,
         font_weight: f.fontWeight,
         text_align: f.textAlign,
+        vertical_align: f.verticalAlign,
         max_width: f.maxWidth,
         sort_order: i,
       }));
