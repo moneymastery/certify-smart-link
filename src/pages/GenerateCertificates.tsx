@@ -69,27 +69,26 @@ const GenerateCertificates = () => {
       setSetupError(null);
 
       try {
-        // Deterministic: prefer the org owned by this user, oldest first.
         let { data: orgs, error: orgLookupError } = await supabase
           .from("organizations")
           .select("id, name, created_at")
-          .eq("owner_id", user.id)
           .order("created_at", { ascending: true })
-          .limit(1);
+          .limit(20);
 
         if (orgLookupError) throw orgLookupError;
 
-        if (!orgs || orgs.length === 0) {
-          const { data: anyOrgs, error: anyErr } = await supabase
-            .from("organizations")
-            .select("id, name, created_at")
-            .order("created_at", { ascending: true })
+        let org = orgs?.[0];
+        if (orgs && orgs.length > 0) {
+          const { data: templateOrgs } = await supabase
+            .from("templates")
+            .select("organization_id, created_at")
+            .in("organization_id", orgs.map((item) => item.id))
+            .order("created_at", { ascending: false })
             .limit(1);
-          if (anyErr) throw anyErr;
-          orgs = anyOrgs as any;
+          const activeOrgId = templateOrgs?.[0]?.organization_id;
+          org = orgs.find((item) => item.id === activeOrgId) || org;
         }
 
-        let org = orgs?.[0];
         if (!org) {
           const slug = `org-${user.id.substring(0, 8)}`;
           const { data: newOrgId, error: orgInsertError } = await supabase.rpc('create_user_organization', {
