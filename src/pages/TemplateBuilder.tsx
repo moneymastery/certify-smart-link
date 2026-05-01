@@ -172,7 +172,7 @@ const TemplateBuilder = () => {
           _slug: slug,
           _owner_id: user.id,
         });
-        org = newOrgId ? { id: newOrgId as string } : null;
+        org = newOrgId ? ({ id: newOrgId as string } as any) : null;
       }
       if (org) setOrgId(org.id);
     };
