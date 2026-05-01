@@ -148,8 +148,23 @@ const TemplateBuilder = () => {
   useEffect(() => {
     if (!user) return;
     const getOrg = async () => {
-      let { data: orgs } = await supabase.from("organizations").select("id").limit(1);
+      // Deterministic: prefer the org owned by this user, oldest first.
+      let { data: orgs } = await supabase
+        .from("organizations")
+        .select("id, created_at")
+        .eq("owner_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1);
       let org = orgs?.[0];
+      if (!org) {
+        // Fallback: any org the user can see (member of)
+        const { data: anyOrgs } = await supabase
+          .from("organizations")
+          .select("id, created_at")
+          .order("created_at", { ascending: true })
+          .limit(1);
+        org = anyOrgs?.[0];
+      }
       if (!org) {
         const slug = `org-${user.id.substring(0, 8)}`;
         const { data: newOrgId } = await supabase.rpc('create_user_organization', {
@@ -157,7 +172,7 @@ const TemplateBuilder = () => {
           _slug: slug,
           _owner_id: user.id,
         });
-        org = newOrgId ? { id: newOrgId } : null;
+        org = newOrgId ? { id: newOrgId as string } : null;
       }
       if (org) setOrgId(org.id);
     };
