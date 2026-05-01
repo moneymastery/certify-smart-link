@@ -99,7 +99,7 @@ const GenerateCertificates = () => {
           });
 
           if (orgInsertError || !newOrgId) throw orgInsertError ?? new Error("Could not create organization");
-          org = { id: newOrgId, name: 'My Organization' };
+          org = { id: newOrgId, name: 'My Organization' } as any;
         }
 
         setOrgId(org.id);
