@@ -77,22 +77,22 @@ const Dashboard = () => {
 
   const resolveOrgId = async (): Promise<string | null> => {
     if (!user) return null;
-    // Deterministic: prefer the org owned by this user, oldest first.
-    // Falls back to any org the user is a member of (for invited users).
-    const { data: ownedOrgs } = await supabase
-      .from("organizations")
-      .select("id, created_at")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: true })
-      .limit(1);
-    if (ownedOrgs && ownedOrgs[0]) return ownedOrgs[0].id;
-
-    const { data: anyOrgs } = await supabase
+    const { data: orgs, error } = await supabase
       .from("organizations")
       .select("id, created_at")
       .order("created_at", { ascending: true })
-      .limit(1);
-    if (anyOrgs && anyOrgs[0]) return anyOrgs[0].id;
+      .limit(20);
+    if (error) throw error;
+    if (orgs && orgs.length > 0) {
+      const orgIds = orgs.map((org) => org.id);
+      const { data: templateOrgs } = await supabase
+        .from("templates")
+        .select("organization_id, created_at")
+        .in("organization_id", orgIds)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      return templateOrgs?.[0]?.organization_id || orgs[0].id;
+    }
 
     // No org yet — bootstrap one so the dashboard always loads cleanly.
     const slug = `org-${user.id.substring(0, 8)}`;
@@ -107,12 +107,7 @@ const Dashboard = () => {
   const loadData = async () => {
     if (!user) return;
 
-    let oid = await resolveOrgId();
-    // Retry once on transient empty result (JWT propagation race after fresh login)
-    if (!oid) {
-      await new Promise((r) => setTimeout(r, 400));
-      oid = await resolveOrgId();
-    }
+    const oid = await resolveOrgId();
     if (!oid) return;
     setOrgId(oid);
 
