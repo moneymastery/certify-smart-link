@@ -75,11 +75,44 @@ const Dashboard = () => {
   // Re-download
   const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
 
+  const resolveOrgId = async (): Promise<string | null> => {
+    if (!user) return null;
+    // Deterministic: prefer the org owned by this user, oldest first.
+    // Falls back to any org the user is a member of (for invited users).
+    const { data: ownedOrgs } = await supabase
+      .from("organizations")
+      .select("id, created_at")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (ownedOrgs && ownedOrgs[0]) return ownedOrgs[0].id;
+
+    const { data: anyOrgs } = await supabase
+      .from("organizations")
+      .select("id, created_at")
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (anyOrgs && anyOrgs[0]) return anyOrgs[0].id;
+
+    // No org yet — bootstrap one so the dashboard always loads cleanly.
+    const slug = `org-${user.id.substring(0, 8)}`;
+    const { data: newOrgId } = await supabase.rpc("create_user_organization", {
+      _name: "My Organization",
+      _slug: slug,
+      _owner_id: user.id,
+    });
+    return (newOrgId as string) || null;
+  };
+
   const loadData = async () => {
     if (!user) return;
 
-    const { data: orgs } = await supabase.from("organizations").select("id").limit(1);
-    const oid = orgs?.[0]?.id;
+    let oid = await resolveOrgId();
+    // Retry once on transient empty result (JWT propagation race after fresh login)
+    if (!oid) {
+      await new Promise((r) => setTimeout(r, 400));
+      oid = await resolveOrgId();
+    }
     if (!oid) return;
     setOrgId(oid);
 
