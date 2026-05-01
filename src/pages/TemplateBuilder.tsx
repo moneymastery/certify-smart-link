@@ -84,6 +84,9 @@ const sampleFieldValue = (field: FieldItem) => {
 
 type DragTarget = string | "logo" | "signature" | "seal" | "qrCode" | "certId" | "orgName";
 
+// Global cache to prevent concurrent resolution calls
+let resolveOrgPromise: Promise<any> | null = null;
+
 const TemplateBuilder = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -148,30 +151,64 @@ const TemplateBuilder = () => {
   useEffect(() => {
     if (!user) return;
     const getOrg = async () => {
-      const { data: orgs } = await supabase
-        .from("organizations")
-        .select("id, created_at")
-        .order("created_at", { ascending: true })
-        .limit(20);
-      let org = orgs?.[0];
-      if (orgs && orgs.length > 0) {
-        const { data: templateOrgs } = await supabase
-          .from("templates")
-          .select("organization_id, created_at")
-          .in("organization_id", orgs.map((item) => item.id))
-          .order("created_at", { ascending: false })
-          .limit(1);
-        const activeOrgId = templateOrgs?.[0]?.organization_id;
-        org = orgs.find((item) => item.id === activeOrgId) || org;
-      }
-      if (!org) {
-        const slug = `org-${user.id.substring(0, 8)}`;
-        const { data: newOrgId } = await supabase.rpc('create_user_organization', {
-          _name: 'My Organization',
-          _slug: slug,
-          _owner_id: user.id,
-        });
-        org = newOrgId ? ({ id: newOrgId as string } as any) : null;
+      let org: any = null;
+
+      if (resolveOrgPromise) {
+        org = await resolveOrgPromise;
+      } else {
+        const doResolve = async () => {
+          let orgs: any[] | null = null;
+          
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const { data } = await supabase
+              .from("organizations")
+              .select("id, created_at")
+              .eq("owner_id", user.id)
+              .order("created_at", { ascending: true })
+              .limit(20);
+            orgs = data;
+            if (orgs && orgs.length > 0) break;
+            if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+          }
+          let foundOrg = orgs?.[0];
+          if (orgs && orgs.length > 0) {
+            const { data: templateOrgs } = await supabase
+              .from("templates")
+              .select("organization_id, created_at")
+              .in("organization_id", orgs.map((item) => item.id))
+              .order("created_at", { ascending: false })
+              .limit(1);
+            const activeOrgId = templateOrgs?.[0]?.organization_id;
+            foundOrg = orgs.find((item) => item.id === activeOrgId) || foundOrg;
+          }
+          if (!foundOrg) {
+            const slug = `org-${user.id.substring(0, 8)}`;
+            const { data: newOrgId } = await supabase.rpc('create_user_organization', {
+              _name: 'My Organization',
+              _slug: slug,
+              _owner_id: user.id,
+            });
+            if (newOrgId) {
+              foundOrg = { id: newOrgId as string } as any;
+            } else {
+              // 409 = slug conflict — re-query by owner_id (RLS allows this)
+              const { data: retryOrgs } = await supabase
+                .from('organizations')
+                .select('id')
+                .eq('owner_id', user.id)
+                .limit(1);
+              if (retryOrgs && retryOrgs.length > 0) foundOrg = retryOrgs[0] as any;
+            }
+          }
+          return foundOrg;
+        };
+
+        resolveOrgPromise = doResolve();
+        try {
+          org = await resolveOrgPromise;
+        } finally {
+          setTimeout(() => { resolveOrgPromise = null; }, 1000);
+        }
       }
       if (org) setOrgId(org.id);
     };
@@ -477,10 +514,22 @@ const TemplateBuilder = () => {
               className="border-none bg-transparent font-heading text-lg font-semibold h-auto p-0 focus-visible:ring-0 w-64"
             />
           </div>
-          <Button variant="hero" size="sm" onClick={handleSave} disabled={saving || loading}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {isEditMode ? "Update Template" : "Save Template"}
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-2 mr-2 border-r border-border pr-4">
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-medium text-foreground">{user?.email || "User Profile"}</span>
+              </div>
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="text-sm font-medium text-primary">
+                  {user?.email?.charAt(0).toUpperCase() || "U"}
+                </span>
+              </div>
+            </div>
+            <Button variant="hero" size="sm" onClick={handleSave} disabled={saving || loading}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isEditMode ? "Update Template" : "Save Template"}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -540,19 +589,40 @@ const TemplateBuilder = () => {
         </aside>
 
         {/* Canvas */}
-        <div ref={containerRef} className="flex-1 bg-muted/30 flex items-center justify-center p-6 overflow-auto">
+        <div ref={containerRef} className="flex-1 bg-muted/30 overflow-auto">
+          {/* Centering wrapper — sized to the scaled visual canvas so scroll/layout is correct */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "100%",
+            minWidth: "100%",
+            padding: "24px",
+            boxSizing: "border-box" as const,
+          }}>
+            {/* Size placeholder so the page layout respects the scaled canvas */}
+            <div style={{
+              width: CANVAS_WIDTH * canvasScale,
+              height: CANVAS_HEIGHT * canvasScale,
+              flexShrink: 0,
+              position: "relative",
+            }}>
           <div
             ref={canvasRef}
             onPointerDown={handleCanvasPointerDown}
-            className="relative bg-background border border-border shadow-lg origin-center touch-none"
+            className="relative bg-background border border-border shadow-lg touch-none"
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
               transform: `scale(${canvasScale})`,
+              transformOrigin: "top left",
               backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
               backgroundSize: "cover",
               backgroundPosition: "center",
               fontFamily: "Arial, Helvetica, sans-serif",
+              position: "absolute",
+              top: 0,
+              left: 0,
             }}
           >
             {/* Logo overlay — draggable */}
@@ -628,8 +698,8 @@ const TemplateBuilder = () => {
                   transform: "translate(-50%, -50%)",
                 }}
               >
-                <div className="w-14 h-14 border-2 border-dashed border-muted-foreground/60 bg-background/50 rounded flex items-center justify-center">
-                  <span className="text-[9px] text-muted-foreground font-medium">QR</span>
+                <div className="w-[80px] h-[80px] border-2 border-dashed border-muted-foreground/60 bg-background/50 rounded flex items-center justify-center">
+                  <span className="text-[10px] text-muted-foreground font-medium">QR</span>
                 </div>
                 <span className="text-[7px] text-muted-foreground mt-0.5">Scan to verify</span>
               </div>
@@ -733,6 +803,8 @@ const TemplateBuilder = () => {
                 </div>
               </div>
             )}
+          </div>
+            </div>
           </div>
         </div>
 

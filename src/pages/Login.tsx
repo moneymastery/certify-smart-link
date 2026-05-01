@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Separator } from "@/components/ui/separator";
@@ -102,17 +101,16 @@ const Login = () => {
             onClick={async () => {
               setLoading(true);
               try {
-                const result = await lovable.auth.signInWithOAuth("google", {
-                  redirect_uri: window.location.origin,
+                const { error } = await supabase.auth.signInWithOAuth({
+                  provider: "google",
+                  options: {
+                    redirectTo: `${window.location.origin}/dashboard`,
+                  },
                 });
-                if (result.error) {
-                  toast({ title: "Error", description: String(result.error), variant: "destructive" });
-                }
-                if (result.redirected) return;
-                navigate("/dashboard");
+                if (error) throw error;
+                // Supabase handles the redirect — no need to navigate() manually
               } catch (err: any) {
                 toast({ title: "Error", description: err.message, variant: "destructive" });
-              } finally {
                 setLoading(false);
               }
             }}

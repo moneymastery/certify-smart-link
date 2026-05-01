@@ -43,6 +43,9 @@ const sidebarItems = [
   { icon: BarChart3, label: "Batches" },
 ];
 
+// Global cache to prevent concurrent resolveOrgId calls during StrictMode double-mounts
+let resolveOrgPromise: Promise<string | null> | null = null;
+
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [activeItem, setActiveItem] = useState("Overview");
@@ -77,31 +80,69 @@ const Dashboard = () => {
 
   const resolveOrgId = async (): Promise<string | null> => {
     if (!user) return null;
-    const { data: orgs, error } = await supabase
-      .from("organizations")
-      .select("id, created_at")
-      .order("created_at", { ascending: true })
-      .limit(20);
-    if (error) throw error;
-    if (orgs && orgs.length > 0) {
-      const orgIds = orgs.map((org) => org.id);
-      const { data: templateOrgs } = await supabase
-        .from("templates")
-        .select("organization_id, created_at")
-        .in("organization_id", orgIds)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      return templateOrgs?.[0]?.organization_id || orgs[0].id;
-    }
+    if (resolveOrgPromise) return resolveOrgPromise;
 
-    // No org yet — bootstrap one so the dashboard always loads cleanly.
-    const slug = `org-${user.id.substring(0, 8)}`;
-    const { data: newOrgId } = await supabase.rpc("create_user_organization", {
-      _name: "My Organization",
-      _slug: slug,
-      _owner_id: user.id,
-    });
-    return (newOrgId as string) || null;
+    const doResolve = async () => {
+      let orgs: any[] | null = null;
+      
+      // Retry loop to handle RLS propagation delay right after login
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("id, created_at")
+          .eq("owner_id", user.id)
+          .order("created_at", { ascending: true })
+          .limit(20);
+          
+        if (error) throw error;
+        orgs = data;
+        
+        if (orgs && orgs.length > 0) {
+          break; // Found it!
+        }
+        
+        // Wait 500ms before retrying if nothing was found
+        if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+      }
+
+      console.log("resolveOrgId: initial select returned", orgs?.length, "orgs");
+      if (orgs && orgs.length > 0) {
+        const orgIds = orgs.map((org) => org.id);
+        const { data: templateOrgs } = await supabase
+          .from("templates")
+          .select("organization_id, created_at")
+          .in("organization_id", orgIds)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        return templateOrgs?.[0]?.organization_id || orgs[0].id;
+      }
+
+      // No org yet — bootstrap one. Use direct insert with conflict handling.
+      const slug = `org-${user.id.substring(0, 8)}`;
+      console.log("resolveOrgId: Calling RPC create_user_organization with slug", slug);
+      // Try the RPC first; on 409 slug conflict, fall back to owner_id query
+      const { data: newOrgId } = await supabase.rpc("create_user_organization", {
+        _name: "My Organization",
+        _slug: slug,
+        _owner_id: user.id,
+      });
+      if (newOrgId) return (newOrgId as string);
+      // Conflict or error — org must already exist, re-query by owner_id
+      const { data: existingOrgs } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("owner_id", user.id)
+        .limit(1);
+      return existingOrgs?.[0]?.id || null;
+    };
+
+    resolveOrgPromise = doResolve();
+    try {
+      return await resolveOrgPromise;
+    } finally {
+      // Clear cache after a short delay to allow concurrent calls to share it
+      setTimeout(() => { resolveOrgPromise = null; }, 1000);
+    }
   };
 
   const loadData = async () => {
@@ -362,19 +403,36 @@ const Dashboard = () => {
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t border-border space-y-1">
-          <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" asChild>
-            <Link to="/">← Back to Home</Link>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-muted-foreground"
-            onClick={signOut}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
+        <div className="p-4 border-t border-border space-y-4">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-sm font-medium text-primary">
+                {user?.email?.charAt(0).toUpperCase() || "U"}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {user?.email || "User Profile"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                Logged in
+              </p>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" asChild>
+              <Link to="/">← Back to Home</Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-muted-foreground"
+              onClick={signOut}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </aside>
 

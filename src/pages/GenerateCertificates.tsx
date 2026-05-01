@@ -36,6 +36,9 @@ type GeneratedCertificate = {
   pdfBlob?: Blob;
 };
 
+// Global cache to prevent concurrent resolution calls
+let resolveOrgPromise: Promise<any> | null = null;
+
 const GenerateCertificates = () => {
   const { user } = useAuth();
   const [step, setStep] = useState<Step>("upload");
@@ -69,37 +72,77 @@ const GenerateCertificates = () => {
       setSetupError(null);
 
       try {
-        let { data: orgs, error: orgLookupError } = await supabase
-          .from("organizations")
-          .select("id, name, created_at")
-          .order("created_at", { ascending: true })
-          .limit(20);
+        let org: any = null;
 
-        if (orgLookupError) throw orgLookupError;
+        if (resolveOrgPromise) {
+          org = await resolveOrgPromise;
+        } else {
+          const doResolve = async () => {
+            let orgs: any[] | null = null;
+            let orgLookupError = null;
 
-        let org = orgs?.[0];
-        if (orgs && orgs.length > 0) {
-          const { data: templateOrgs } = await supabase
-            .from("templates")
-            .select("organization_id, created_at")
-            .in("organization_id", orgs.map((item) => item.id))
-            .order("created_at", { ascending: false })
-            .limit(1);
-          const activeOrgId = templateOrgs?.[0]?.organization_id;
-          org = orgs.find((item) => item.id === activeOrgId) || org;
+            // Retry loop to handle RLS propagation delay right after login
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const { data, error } = await supabase
+                .from("organizations")
+                .select("id, name, created_at")
+                .eq("owner_id", user.id)
+                .order("created_at", { ascending: true })
+                .limit(20);
+                
+              if (error) { orgLookupError = error; break; }
+              orgs = data;
+              
+              if (orgs && orgs.length > 0) break;
+              if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+            }
+
+            if (orgLookupError) throw orgLookupError;
+
+            let foundOrg = orgs?.[0];
+            if (orgs && orgs.length > 0) {
+              const { data: templateOrgs } = await supabase
+                .from("templates")
+                .select("organization_id, created_at")
+                .in("organization_id", orgs.map((item) => item.id))
+                .order("created_at", { ascending: false })
+                .limit(1);
+              const activeOrgId = templateOrgs?.[0]?.organization_id;
+              foundOrg = orgs.find((item) => item.id === activeOrgId) || foundOrg;
+            }
+
+            if (!foundOrg) {
+              const slug = `org-${user.id.substring(0, 8)}`;
+              const { data: newOrgId } = await supabase.rpc('create_user_organization', {
+                _name: 'My Organization',
+                _slug: slug,
+                _owner_id: user.id,
+              });
+
+              if (newOrgId) {
+                foundOrg = { id: newOrgId, name: 'My Organization' } as any;
+              } else {
+                // 409 = slug conflict — re-query by owner_id (RLS allows this)
+                const { data: retryOrgs } = await supabase
+                  .from('organizations')
+                  .select('id, name')
+                  .eq('owner_id', user.id)
+                  .limit(1);
+                foundOrg = retryOrgs?.[0] as any;
+              }
+            }
+            return foundOrg;
+          };
+
+          resolveOrgPromise = doResolve();
+          try {
+            org = await resolveOrgPromise;
+          } finally {
+            setTimeout(() => { resolveOrgPromise = null; }, 1000);
+          }
         }
-
-        if (!org) {
-          const slug = `org-${user.id.substring(0, 8)}`;
-          const { data: newOrgId, error: orgInsertError } = await supabase.rpc('create_user_organization', {
-            _name: 'My Organization',
-            _slug: slug,
-            _owner_id: user.id,
-          });
-
-          if (orgInsertError || !newOrgId) throw orgInsertError ?? new Error("Could not create organization");
-          org = { id: newOrgId, name: 'My Organization' } as any;
-        }
+        
+        if (!org) throw new Error("Could not find or create org");
 
         setOrgId(org.id);
         setOrgName(org.name);
@@ -422,6 +465,17 @@ const GenerateCertificates = () => {
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-accent" />
               <span className="font-heading text-lg font-semibold text-foreground">Generate Certificates</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-sm font-medium text-foreground">{user?.email || "User Profile"}</span>
+              <span className="text-xs text-muted-foreground">Logged in</span>
+            </div>
+            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-sm font-medium text-primary">
+                {user?.email?.charAt(0).toUpperCase() || "U"}
+              </span>
             </div>
           </div>
         </div>
