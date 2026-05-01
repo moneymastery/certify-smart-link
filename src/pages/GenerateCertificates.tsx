@@ -69,12 +69,25 @@ const GenerateCertificates = () => {
       setSetupError(null);
 
       try {
-        const { data: orgs, error: orgLookupError } = await supabase
+        // Deterministic: prefer the org owned by this user, oldest first.
+        let { data: orgs, error: orgLookupError } = await supabase
           .from("organizations")
-          .select("id, name")
+          .select("id, name, created_at")
+          .eq("owner_id", user.id)
+          .order("created_at", { ascending: true })
           .limit(1);
 
         if (orgLookupError) throw orgLookupError;
+
+        if (!orgs || orgs.length === 0) {
+          const { data: anyOrgs, error: anyErr } = await supabase
+            .from("organizations")
+            .select("id, name, created_at")
+            .order("created_at", { ascending: true })
+            .limit(1);
+          if (anyErr) throw anyErr;
+          orgs = anyOrgs as any;
+        }
 
         let org = orgs?.[0];
         if (!org) {
@@ -86,7 +99,7 @@ const GenerateCertificates = () => {
           });
 
           if (orgInsertError || !newOrgId) throw orgInsertError ?? new Error("Could not create organization");
-          org = { id: newOrgId, name: 'My Organization' };
+          org = { id: newOrgId, name: 'My Organization' } as any;
         }
 
         setOrgId(org.id);
