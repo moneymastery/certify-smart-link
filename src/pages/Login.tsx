@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Separator } from "@/components/ui/separator";
@@ -33,11 +34,12 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const normalizedEmail = email.trim().toLowerCase();
 
     try {
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             data: { full_name: name },
@@ -48,7 +50,7 @@ const Login = () => {
         navigate("/dashboard");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: normalizedEmail,
           password,
         });
         if (error) throw error;
@@ -101,14 +103,10 @@ const Login = () => {
             onClick={async () => {
               setLoading(true);
               try {
-                const { error } = await supabase.auth.signInWithOAuth({
-                  provider: "google",
-                  options: {
-                    redirectTo: `${window.location.origin}/dashboard`,
-                  },
+                const { error } = await lovable.auth.signInWithOAuth("google", {
+                  redirect_uri: `${window.location.origin}/dashboard`,
                 });
                 if (error) throw error;
-                // Supabase handles the redirect — no need to navigate() manually
               } catch (err: any) {
                 toast({ title: "Error", description: err.message, variant: "destructive" });
                 setLoading(false);
@@ -156,7 +154,7 @@ const Login = () => {
                     return;
                   }
                   try {
-                    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
                       redirectTo: `${window.location.origin}/reset-password`,
                     });
                     if (error) throw error;
