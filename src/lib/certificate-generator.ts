@@ -1,6 +1,8 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import {
   buildQrDataUrl,
+  type RenderTemplate,
+  type RenderField,
 } from "./certificate-html-renderer";
 import {
   computeCoverDimensions,
