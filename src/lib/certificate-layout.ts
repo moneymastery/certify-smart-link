@@ -31,13 +31,14 @@ export const getBaselineOffset = (fontSize: number): number => {
 
 export const getTextAnchorTransform = (
   textAlign: string | null | undefined,
-  verticalAlign: string | null | undefined = "middle"
+  verticalAlign: string | null | undefined = "middle",
 ): string => {
-  const y = normalizeVerticalAlign(verticalAlign) === "middle"
-    ? "-50%"
-    : normalizeVerticalAlign(verticalAlign) === "bottom"
-      ? "-100%"
-      : "0";
+  const y =
+    normalizeVerticalAlign(verticalAlign) === "middle"
+      ? "-50%"
+      : normalizeVerticalAlign(verticalAlign) === "bottom"
+        ? "-100%"
+        : "0";
   switch (textAlign) {
     case "right":
       return `translate(-100%, ${y})`;
@@ -51,7 +52,7 @@ export const getTextAnchorTransform = (
 export const getTextAnchorTop = (
   yPct: number,
   fontSize: number,
-  verticalAlign: string | null | undefined = "middle"
+  verticalAlign: string | null | undefined = "middle",
 ): string => {
   if (normalizeVerticalAlign(verticalAlign) === "baseline") {
     return `calc(${yPct}% - ${getBaselineOffset(fontSize)}px)`;
@@ -67,16 +68,25 @@ export const getTextAnchorTop = (
 export const sanitizeText = (text: unknown): string => {
   if (text === null || text === undefined) return "";
   const str = typeof text === "string" ? text : String(text);
-  return str
-    .normalize("NFKC")
-    .replace(/[\r\n\t\v\f\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, " ")
-    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-    .replace(/[\u2010-\u2015]/g, "-")
-    .replace(/[\u2026]/g, "...")
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  // Step 1: Hard-strip all control characters BEFORE NFKC normalization.
+  // Some encodings can survive or be reintroduced by normalize(), so we do
+  // this raw pass first.
+  const stripped = str.replace(/[\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, " ");
+  return (
+    stripped
+      .normalize("NFKC")
+      // Step 2: Strip again after normalization (NFKC can re-emit control chars
+      // for certain exotic code points). This is the safety net that fixes the
+      // WinAnsi 0x000a error in production.
+      .replace(/[\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, " ")
+      .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[\u2010-\u2015]/g, "-")
+      .replace(/[\u2026]/g, "...")
+      .replace(/[^\x20-\x7E\xA0-\xFF]/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
 };
 
 // ── Field value resolution ────────────────────────────────────────
@@ -94,20 +104,18 @@ export interface RecipientDescriptor {
  * Single source of truth for resolving a field's display value.
  * Used identically in the preview component and the PDF generator.
  */
-export const resolveFieldValue = (
-  field: FieldDescriptor,
-  data: RecipientDescriptor
-): string => {
+export const resolveFieldValue = (field: FieldDescriptor, data: RecipientDescriptor): string => {
   if (field.fieldKey === "recipient_name") {
-    const raw = data.recipientName && data.recipientName !== "Unknown"
-      ? data.recipientName
-      : data.recipientData["recipient_name"] ||
-        data.recipientData["name"] ||
-        data.recipientData["NAME"] ||
-        Object.entries(data.recipientData).find(
-          ([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org")
-        )?.[1] ||
-        "Unknown";
+    const raw =
+      data.recipientName && data.recipientName !== "Unknown"
+        ? data.recipientName
+        : data.recipientData["recipient_name"] ||
+          data.recipientData["name"] ||
+          data.recipientData["NAME"] ||
+          Object.entries(data.recipientData).find(
+            ([k]) => k.toLowerCase().includes("name") && !k.toLowerCase().includes("org"),
+          )?.[1] ||
+          "Unknown";
     return sanitizeText(raw);
   }
 
@@ -117,9 +125,7 @@ export const resolveFieldValue = (
       const k = key.trim();
       return (
         data.recipientData[k] ||
-        Object.entries(data.recipientData).find(
-          ([rk]) => rk.toLowerCase() === k.toLowerCase()
-        )?.[1] ||
+        Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === k.toLowerCase())?.[1] ||
         ""
       );
     });
@@ -128,9 +134,7 @@ export const resolveFieldValue = (
 
   const raw =
     data.recipientData[field.fieldKey] ||
-    Object.entries(data.recipientData).find(
-      ([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase()
-    )?.[1] ||
+    Object.entries(data.recipientData).find(([rk]) => rk.toLowerCase() === field.fieldKey.toLowerCase())?.[1] ||
     "";
   return sanitizeText(raw);
 };
@@ -152,7 +156,7 @@ export const computeCoverDimensions = (
   imgWidth: number,
   imgHeight: number,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
 ): CoverDimensions => {
   const imgRatio = imgWidth / imgHeight;
   const canvasRatio = canvasWidth / canvasHeight;
@@ -197,7 +201,7 @@ export const computePdfBaselineY = (
   yPct: number,
   fontSize: number,
   totalLines: number,
-  lineIndex: number
+  lineIndex: number,
 ): number => {
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const totalH = totalLines * lineHeight;
@@ -208,13 +212,7 @@ export const computePdfBaselineY = (
   //   CSS baseline of line i  = centre - totalH/2 + i*lineHeight + (lineHeight-fontSize)/2 + ascent
   //   PDF baseline             = canvasH - CSS_baseline
   //     = anchorY + totalH/2 - i*lineHeight - (lineHeight-fontSize)/2 - fontSize*ASCENT_RATIO
-  return (
-    anchorY +
-    totalH / 2 -
-    lineIndex * lineHeight -
-    (lineHeight - fontSize) / 2 -
-    fontSize * ASCENT_RATIO
-  );
+  return anchorY + totalH / 2 - lineIndex * lineHeight - (lineHeight - fontSize) / 2 - fontSize * ASCENT_RATIO;
 };
 
 // ── Text X position (PDF) ────────────────────────────────────────
@@ -226,7 +224,7 @@ export const computePdfTextX = (
   canvasW: number,
   xPct: number,
   lineWidth: number,
-  textAlign: "left" | "center" | "right"
+  textAlign: "left" | "center" | "right",
 ): number => {
   const anchor = (xPct / 100) * canvasW;
   switch (textAlign) {
@@ -245,11 +243,7 @@ export const computePdfTextX = (
  * `measure` is a function that returns the pixel width of a string
  * (injected so both the PDF font and browser canvas can be used).
  */
-export const wrapText = (
-  text: string,
-  measure: (s: string) => number,
-  maxWidth: number
-): string[] => {
+export const wrapText = (text: string, measure: (s: string) => number, maxWidth: number): string[] => {
   const words = sanitizeText(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let currentLine = "";
