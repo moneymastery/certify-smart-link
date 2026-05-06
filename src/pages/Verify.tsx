@@ -242,7 +242,7 @@ const Verify = () => {
           {/* Footer */}
           <p className="text-center text-xs text-muted-foreground pt-4">
             {branding ? (
-              <>Verified by <span className="font-medium text-foreground">{displayName}</span> · Powered by <span className="font-medium text-foreground">CertifyPro</span></>
+              <>Verified by <span className="font-medium text-foreground">{displayName}</span></>
             ) : (
               <>Powered by <span className="font-medium text-foreground">CertifyPro</span></>
             )}
