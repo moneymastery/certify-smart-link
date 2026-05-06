@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
+import { sanitizeText } from "@/lib/certificate-layout";
 import {
   ShieldCheck,
   ArrowLeft,
@@ -89,12 +90,15 @@ const GenerateCertificates = () => {
                 .eq("owner_id", user.id)
                 .order("created_at", { ascending: true })
                 .limit(20);
-                
-              if (error) { orgLookupError = error; break; }
+
+              if (error) {
+                orgLookupError = error;
+                break;
+              }
               orgs = data;
-              
+
               if (orgs && orgs.length > 0) break;
-              if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+              if (attempt < 2) await new Promise((r) => setTimeout(r, 500));
             }
 
             if (orgLookupError) throw orgLookupError;
@@ -104,7 +108,10 @@ const GenerateCertificates = () => {
               const { data: templateOrgs } = await supabase
                 .from("templates")
                 .select("organization_id, created_at")
-                .in("organization_id", orgs.map((item) => item.id))
+                .in(
+                  "organization_id",
+                  orgs.map((item) => item.id),
+                )
                 .order("created_at", { ascending: false })
                 .limit(1);
               const activeOrgId = templateOrgs?.[0]?.organization_id;
@@ -113,20 +120,20 @@ const GenerateCertificates = () => {
 
             if (!foundOrg) {
               const slug = `org-${user.id.substring(0, 8)}`;
-              const { data: newOrgId } = await supabase.rpc('create_user_organization', {
-                _name: 'My Organization',
+              const { data: newOrgId } = await supabase.rpc("create_user_organization", {
+                _name: "My Organization",
                 _slug: slug,
                 _owner_id: user.id,
               });
 
               if (newOrgId) {
-                foundOrg = { id: newOrgId, name: 'My Organization' } as any;
+                foundOrg = { id: newOrgId, name: "My Organization" } as any;
               } else {
                 // 409 = slug conflict — re-query by owner_id (RLS allows this)
                 const { data: retryOrgs } = await supabase
-                  .from('organizations')
-                  .select('id, name')
-                  .eq('owner_id', user.id)
+                  .from("organizations")
+                  .select("id, name")
+                  .eq("owner_id", user.id)
                   .limit(1);
                 foundOrg = retryOrgs?.[0] as any;
               }
@@ -138,10 +145,12 @@ const GenerateCertificates = () => {
           try {
             org = await resolveOrgPromise;
           } finally {
-            setTimeout(() => { resolveOrgPromise = null; }, 1000);
+            setTimeout(() => {
+              resolveOrgPromise = null;
+            }, 1000);
           }
         }
-        
+
         if (!org) throw new Error("Could not find or create org");
 
         setOrgId(org.id);
@@ -190,7 +199,9 @@ const GenerateCertificates = () => {
   }, [user]);
 
   const [templateFields, setTemplateFields] = useState<{ field_key: string; label: string }[]>([]);
-  const [autoMapStats, setAutoMapStats] = useState<{ matched: number; total: number; unmatched: string[] } | null>(null);
+  const [autoMapStats, setAutoMapStats] = useState<{ matched: number; total: number; unmatched: string[] } | null>(
+    null,
+  );
 
   // Extract {{placeholder}} variable names from template text fields
   const placeholderVars = useMemo(() => {
@@ -213,17 +224,17 @@ const GenerateCertificates = () => {
     setCsvRows(rows);
 
     const nameCandidates = headers.filter((h) =>
-      ["name", "recipient_name", "full_name", "student_name"].includes(h.toLowerCase().trim())
+      ["name", "recipient_name", "full_name", "student_name"].includes(h.toLowerCase().trim()),
     );
     if (nameCandidates.length > 0) setNameColumn(nameCandidates[0]);
 
     const emailCandidates = headers.filter((h) =>
-      ["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim())
+      ["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim()),
     );
     if (emailCandidates.length > 0) setEmailColumn(emailCandidates[0]);
 
     const preSelected = headers.filter(
-      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim())
+      (h) => !["email", "recipient_email", "mail", "e-mail"].includes(h.toLowerCase().trim()),
     );
     setVerificationFields(preSelected);
 
@@ -292,7 +303,11 @@ const GenerateCertificates = () => {
     }
 
     if (csvRows.length === 0) {
-      toast({ title: "No recipients found", description: "Upload a file with at least one row.", variant: "destructive" });
+      toast({
+        title: "No recipients found",
+        description: "Upload a file with at least one row.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -331,19 +346,27 @@ const GenerateCertificates = () => {
       return;
     }
 
-    // Build recipientData using field mapping so only mapped fields get values
+    // Build recipientData using field mapping so only mapped fields get values.
+    // Sanitize ALL values at ingestion so control characters (e.g. newlines from
+    // CSV quoted cells) can never reach pdf-lib's WinAnsi encoder.
     const batchRows = csvRows.map((row) => {
+      // Sanitize the raw row first so every downstream consumer is clean
+      const cleanRow: Record<string, string> = {};
+      for (const [k, v] of Object.entries(row)) {
+        cleanRow[k] = sanitizeText(v);
+      }
+
       const mappedData: Record<string, string> = {};
       // Map all field keys AND placeholder variable names to their CSV values
       for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
-        if (csvCol && row[csvCol] != null) {
-          mappedData[fieldKey] = String(row[csvCol]);
+        if (csvCol && cleanRow[csvCol] != null) {
+          mappedData[fieldKey] = cleanRow[csvCol];
         }
       }
       return {
-        recipientName: String(row[nameColumn] || "").trim() || "Unknown",
-        recipientEmail: emailColumn ? row[emailColumn] : undefined,
-        recipientData: { ...row, ...mappedData },
+        recipientName: sanitizeText(cleanRow[nameColumn] || "") || "Unknown",
+        recipientEmail: emailColumn ? cleanRow[emailColumn] : undefined,
+        recipientData: { ...cleanRow, ...mappedData },
       };
     });
 
@@ -451,7 +474,9 @@ const GenerateCertificates = () => {
           <div className="text-center space-y-4">
             <Loader2 className="h-12 w-12 text-accent mx-auto animate-spin" />
             <h3 className="font-heading text-xl font-semibold text-foreground">Preparing Download</h3>
-            <p className="text-sm text-muted-foreground">Bundling {generatedCerts.length} certificates into a ZIP file...</p>
+            <p className="text-sm text-muted-foreground">
+              Bundling {generatedCerts.length} certificates into a ZIP file...
+            </p>
           </div>
         </div>
       )}
@@ -460,7 +485,9 @@ const GenerateCertificates = () => {
         <div className="container mx-auto flex items-center justify-between h-16 px-6">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link to="/dashboard"><ArrowLeft className="h-4 w-4" /></Link>
+              <Link to="/dashboard">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
             </Button>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-accent" />
@@ -473,9 +500,7 @@ const GenerateCertificates = () => {
               <span className="text-xs text-muted-foreground">Logged in</span>
             </div>
             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-medium text-primary">
-                {user?.email?.charAt(0).toUpperCase() || "U"}
-              </span>
+              <span className="text-sm font-medium text-primary">{user?.email?.charAt(0).toUpperCase() || "U"}</span>
             </div>
           </div>
         </div>
@@ -488,13 +513,15 @@ const GenerateCertificates = () => {
             const currentIdx = allSteps.indexOf(step);
             return (
               <div key={s} className="flex items-center gap-2">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                  step === s
-                    ? "bg-primary text-primary-foreground"
-                    : currentIdx > i
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}>
+                <div
+                  className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
+                    step === s
+                      ? "bg-primary text-primary-foreground"
+                      : currentIdx > i
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
                   {currentIdx > i ? <CheckCircle className="h-4 w-4" /> : i + 1}
                 </div>
                 {i < 4 && <div className="w-10 h-px bg-border" />}
@@ -515,7 +542,7 @@ const GenerateCertificates = () => {
             <div className="rounded-lg border border-border bg-muted/30 p-4">
               <p className="text-xs font-medium text-foreground mb-2">Example format:</p>
               <pre className="text-xs text-muted-foreground font-mono">
-{`name,email,course,date
+                {`name,email,course,date
 John Doe,john@example.com,Web Development,2026-04-07
 Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </pre>
@@ -528,49 +555,50 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             <div>
               <h2 className="font-heading text-2xl font-bold text-foreground">Map Fields</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Link each template field to a column from your uploaded file. Only mapped fields will appear on the certificate.
+                Link each template field to a column from your uploaded file. Only mapped fields will appear on the
+                certificate.
               </p>
             </div>
 
-            {autoMapStats && autoMapStats.total > 0 && (() => {
-              const pct = autoMapStats.matched / autoMapStats.total;
-              const isGood = pct === 1;
-              const isPartial = pct > 0 && pct < 1;
-              const isNone = pct === 0;
-              return (
-                <div
-                  className={cn(
-                    "rounded-lg border p-3 flex items-start gap-3",
-                    isGood && "border-accent/30 bg-accent/5",
-                    isPartial && "border-amber-500/30 bg-amber-500/5",
-                    isNone && "border-destructive/30 bg-destructive/5"
-                  )}
-                >
-                  {isGood ? (
-                    <CheckCircle className="h-4 w-4 mt-0.5 text-accent shrink-0" />
-                  ) : (
-                    <AlertCircle
-                      className={cn(
-                        "h-4 w-4 mt-0.5 shrink-0",
-                        isPartial ? "text-amber-600" : "text-destructive"
-                      )}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">
-                      {isGood
-                        ? `All ${autoMapStats.total} template field${autoMapStats.total === 1 ? "" : "s"} auto-matched to your file.`
-                        : `${autoMapStats.matched} of ${autoMapStats.total} fields auto-matched.`}
-                    </p>
-                    {!isGood && autoMapStats.unmatched.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Please map manually: <span className="font-medium text-foreground">{autoMapStats.unmatched.join(", ")}</span>
-                      </p>
+            {autoMapStats &&
+              autoMapStats.total > 0 &&
+              (() => {
+                const pct = autoMapStats.matched / autoMapStats.total;
+                const isGood = pct === 1;
+                const isPartial = pct > 0 && pct < 1;
+                const isNone = pct === 0;
+                return (
+                  <div
+                    className={cn(
+                      "rounded-lg border p-3 flex items-start gap-3",
+                      isGood && "border-accent/30 bg-accent/5",
+                      isPartial && "border-amber-500/30 bg-amber-500/5",
+                      isNone && "border-destructive/30 bg-destructive/5",
                     )}
+                  >
+                    {isGood ? (
+                      <CheckCircle className="h-4 w-4 mt-0.5 text-accent shrink-0" />
+                    ) : (
+                      <AlertCircle
+                        className={cn("h-4 w-4 mt-0.5 shrink-0", isPartial ? "text-amber-600" : "text-destructive")}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        {isGood
+                          ? `All ${autoMapStats.total} template field${autoMapStats.total === 1 ? "" : "s"} auto-matched to your file.`
+                          : `${autoMapStats.matched} of ${autoMapStats.total} fields auto-matched.`}
+                      </p>
+                      {!isGood && autoMapStats.unmatched.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Please map manually:{" "}
+                          <span className="font-medium text-foreground">{autoMapStats.unmatched.join(", ")}</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
 
             {templates.length > 0 && (
               <div className="space-y-2">
@@ -581,7 +609,9 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
                   {templates.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -597,7 +627,9 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 >
                   <option value="">Select column...</option>
                   {csvHeaders.map((h) => (
-                    <option key={h} value={h}>{h}</option>
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -610,7 +642,9 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 >
                   <option value="">None</option>
                   {csvHeaders.map((h) => (
-                    <option key={h} value={h}>{h}</option>
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -627,18 +661,20 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                     .filter((f) => f.field_key !== "recipient_name" && !f.label.includes("{{"))
                     .map((f) => (
                       <div key={f.field_key} className="flex items-center gap-3">
-                        <span className="text-sm text-foreground w-40 truncate" title={f.label}>{f.label}</span>
+                        <span className="text-sm text-foreground w-40 truncate" title={f.label}>
+                          {f.label}
+                        </span>
                         <span className="text-muted-foreground text-xs">→</span>
                         <select
                           value={fieldMapping[f.field_key] || ""}
-                          onChange={(e) =>
-                            setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))
-                          }
+                          onChange={(e) => setFieldMapping((prev) => ({ ...prev, [f.field_key]: e.target.value }))}
                           className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                         >
                           <option value="">— Skip —</option>
                           {csvHeaders.map((h) => (
-                            <option key={h} value={h}>{h}</option>
+                            <option key={h} value={h}>
+                              {h}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -650,7 +686,8 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                   <div className="space-y-2 mt-4">
                     <Label className="text-sm font-medium">Template Text Variables → CSV Column</Label>
                     <p className="text-xs text-muted-foreground">
-                      These variables appear inside template text like {"{{company}}"}. Map each to the correct CSV column.
+                      These variables appear inside template text like {"{{company}}"}. Map each to the correct CSV
+                      column.
                     </p>
                     {placeholderVars.map((pv) => (
                       <div key={pv.varName} className="flex items-center gap-3">
@@ -658,14 +695,14 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                         <span className="text-muted-foreground text-xs">→</span>
                         <select
                           value={fieldMapping[pv.varName] || ""}
-                          onChange={(e) =>
-                            setFieldMapping((prev) => ({ ...prev, [pv.varName]: e.target.value }))
-                          }
+                          onChange={(e) => setFieldMapping((prev) => ({ ...prev, [pv.varName]: e.target.value }))}
                           className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
                         >
                           <option value="">— Skip —</option>
                           {csvHeaders.map((h) => (
-                            <option key={h} value={h}>{h}</option>
+                            <option key={h} value={h}>
+                              {h}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -677,12 +714,15 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
 
             {templateFields.length === 0 && (
               <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-                No custom fields found in the selected template. All CSV columns will be stored as data but only the recipient name will be rendered on the certificate.
+                No custom fields found in the selected template. All CSV columns will be stored as data but only the
+                recipient name will be rendered on the certificate.
               </div>
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep("upload")}>Back</Button>
+              <Button variant="outline" onClick={() => setStep("upload")}>
+                Back
+              </Button>
               <Button variant="hero" onClick={() => setStep("configure")} disabled={!nameColumn}>
                 Continue to Configure
               </Button>
@@ -700,11 +740,11 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
 
             {(setupLoading || setupError) && (
-              <div className={`rounded-lg border p-4 flex items-start gap-3 ${
-                setupError
-                  ? "border-destructive/30 bg-destructive/5"
-                  : "border-border bg-muted/30"
-              }`}>
+              <div
+                className={`rounded-lg border p-4 flex items-start gap-3 ${
+                  setupError ? "border-destructive/30 bg-destructive/5" : "border-border bg-muted/30"
+                }`}
+              >
                 {setupError ? (
                   <AlertCircle className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                 ) : (
@@ -748,7 +788,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                       variant="outline"
                       className={cn(
                         "w-full justify-start text-left font-normal",
-                        !issueDate && "text-muted-foreground"
+                        !issueDate && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
@@ -765,9 +805,10 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                     />
                   </PopoverContent>
                 </Popover>
-                <p className="text-xs text-muted-foreground">This date appears on the certificate and verification page.</p>
+                <p className="text-xs text-muted-foreground">
+                  This date appears on the certificate and verification page.
+                </p>
               </div>
-
             </div>
 
             {/* Verification fields picker */}
@@ -780,13 +821,14 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {csvHeaders.map((h) => (
-                  <label key={h} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                  <label
+                    key={h}
+                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
                     <Checkbox
                       checked={verificationFields.includes(h)}
                       onCheckedChange={(checked) => {
-                        setVerificationFields((prev) =>
-                          checked ? [...prev, h] : prev.filter((f) => f !== h)
-                        );
+                        setVerificationFields((prev) => (checked ? [...prev, h] : prev.filter((f) => f !== h)));
                       }}
                     />
                     <span className="text-sm text-foreground truncate">
@@ -817,41 +859,44 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                 {showPreview ? "Hide Preview" : "Preview Certificate"}
               </Button>
 
-              {showPreview && previewTemplate && csvRows.length > 0 && (() => {
-                const firstRow = csvRows[0];
-                const t = previewTemplate;
+              {showPreview &&
+                previewTemplate &&
+                csvRows.length > 0 &&
+                (() => {
+                  const firstRow = csvRows[0];
+                  const t = previewTemplate;
 
-                // Build fields array for the shared preview component
-                const visibleFields = previewFields.filter(
-                  (f: any) =>
-                    f.field_key === "recipient_name" ||
-                    fieldMapping[f.field_key] ||
-                    (f.label && f.label.includes("{{"))
-                );
+                  // Build fields array for the shared preview component
+                  const visibleFields = previewFields.filter(
+                    (f: any) =>
+                      f.field_key === "recipient_name" ||
+                      fieldMapping[f.field_key] ||
+                      (f.label && f.label.includes("{{")),
+                  );
 
-                // Build recipientData with mapped values
-                const mappedData: Record<string, string> = { ...firstRow };
-                for (const [key, col] of Object.entries(fieldMapping)) {
-                  if (col && firstRow[col] != null) mappedData[key] = String(firstRow[col]);
-                }
+                  // Build recipientData with mapped values
+                  const mappedData: Record<string, string> = { ...firstRow };
+                  for (const [key, col] of Object.entries(fieldMapping)) {
+                    if (col && firstRow[col] != null) mappedData[key] = String(firstRow[col]);
+                  }
 
-                return (
-                  <div className="rounded-lg border border-border overflow-hidden bg-muted/30">
-                    <div className="bg-muted px-4 py-2">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Preview — {firstRow[nameColumn] || "Row 1"} (first recipient)
-                      </span>
+                  return (
+                    <div className="rounded-lg border border-border overflow-hidden bg-muted/30">
+                      <div className="bg-muted px-4 py-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Preview — {firstRow[nameColumn] || "Row 1"} (first recipient)
+                        </span>
+                      </div>
+                      <CertificatePreview
+                        template={t}
+                        fields={visibleFields}
+                        recipientData={mappedData}
+                        recipientName={String(firstRow[nameColumn] || "Recipient Name")}
+                        orgName={orgName}
+                      />
                     </div>
-                    <CertificatePreview
-                      template={t}
-                      fields={visibleFields}
-                      recipientData={mappedData}
-                      recipientName={String(firstRow[nameColumn] || "Recipient Name")}
-                      orgName={orgName}
-                    />
-                  </div>
-                );
-              })()}
+                  );
+                })()}
             </div>
 
             <div className="rounded-lg border border-border overflow-hidden">
@@ -864,7 +909,10 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                   <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
                     <tr className="border-b border-border">
                       {csvHeaders.map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">
+                        <th
+                          key={h}
+                          className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap"
+                        >
                           {h}
                         </th>
                       ))}
@@ -928,12 +976,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button
-                variant="hero"
-                size="lg"
-                onClick={handleDownloadZip}
-                disabled={downloading}
-              >
+              <Button variant="hero" size="lg" onClick={handleDownloadZip} disabled={downloading}>
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 {downloading ? "Preparing ZIP..." : "Download All as ZIP"}
               </Button>
@@ -943,9 +986,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
             </div>
 
             <div className="rounded-lg border border-border overflow-hidden text-left mt-8 max-w-2xl mx-auto w-full">
-              <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground">
-                Generated Certificates
-              </div>
+              <div className="bg-muted px-4 py-2 text-xs font-medium text-muted-foreground">Generated Certificates</div>
               <div className="max-h-64 overflow-auto divide-y divide-border">
                 {generatedCerts.map((cert) => (
                   <div key={cert.serialNumber} className="px-4 py-3 flex items-center justify-between gap-4">
@@ -953,11 +994,7 @@ Jane Smith,jane@example.com,Data Science,2026-04-07`}
                       <p className="text-sm font-medium text-foreground truncate">{cert.recipientName}</p>
                       <p className="text-xs text-muted-foreground">{cert.serialNumber}</p>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => downloadSingleCertificate(cert)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => downloadSingleCertificate(cert)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </div>
