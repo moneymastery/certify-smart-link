@@ -244,11 +244,12 @@ export const generateCertificatePDF = async (
     if (!val) continue;
 
     const font = f.fontWeight === "bold" ? helveticaBold : helvetica;
-    const measure = (s: string) => font.widthOfTextAtSize(s, f.fontSize);
+    const measure = (s: string) => font.widthOfTextAtSize(sanitizeText(s), f.fontSize);
     
     // If it's a template field and has maxWidth, wrap it. Else use single line.
     const isTemplateText = f.label.includes("{{");
-    const lines = (isTemplateText && f.maxWidth) ? wrapText(val, measure, f.maxWidth) : [val];
+    const safeVal = sanitizeText(val);
+    const lines = (isTemplateText && f.maxWidth) ? wrapText(safeVal, measure, f.maxWidth) : [safeVal];
 
     for (let i = 0; i < lines.length; i++) {
       const line = sanitizeText(lines[i]);

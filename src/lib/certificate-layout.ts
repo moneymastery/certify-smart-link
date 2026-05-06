@@ -68,7 +68,13 @@ export const sanitizeText = (text: unknown): string => {
   if (text === null || text === undefined) return "";
   const str = typeof text === "string" ? text : String(text);
   return str
+    .normalize("NFKC")
     .replace(/[\r\n\t\v\f\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, " ")
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[\u2026]/g, "...")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 };
@@ -244,7 +250,7 @@ export const wrapText = (
   measure: (s: string) => number,
   maxWidth: number
 ): string[] => {
-  const words = text.split(/\s+/);
+  const words = sanitizeText(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let currentLine = "";
 
