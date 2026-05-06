@@ -139,19 +139,28 @@ const Verify = () => {
   const isRevoked = certificate?.status === "revoked";
   const isActive = certificate?.status === "active";
 
-  // Filter fields: use verification_fields if set, otherwise show all non-email fields
-  const visibleFields = recipientData
-    ? Object.entries(recipientData).filter(([key]) => {
-        const lowerKey = key.toLowerCase();
-        if (["name", "email", "recipient_name", "recipient_email"].includes(lowerKey)) return false;
-        if (branding?.verification_fields && branding.verification_fields.length > 0) {
-          return branding.verification_fields.includes(key);
-        }
-        return true;
-      })
-    : [];
+  // Strict whitelist: if verification_fields exists (even empty), it is authoritative.
+  // null/undefined → legacy fallback (show all non-PII).
+  const toKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const whitelist = branding?.verification_fields;
+  const visibleFields: [string, string][] = (() => {
+    if (!recipientData) return [];
+    const entries = Object.entries(recipientData);
+    const skipPII = (k: string) => ["name","email","recipient_name","recipient_email"].includes(k.toLowerCase());
+    if (Array.isArray(whitelist)) {
+      const wlKeys = whitelist.map(toKey);
+      // Preserve user-chosen order
+      const result: [string, string][] = [];
+      for (const wKey of wlKeys) {
+        const match = entries.find(([k]) => toKey(k) === wKey);
+        if (match) result.push(match);
+      }
+      return result;
+    }
+    return entries.filter(([k]) => !skipPII(k));
+  })();
 
-  const displayName = branding?.org_name || "CertifyPro";
+  const displayName = branding?.org_name || "Certificate Verification";
   const logoUrl = branding?.org_logo_url;
 
   return (
