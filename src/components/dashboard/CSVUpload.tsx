@@ -36,12 +36,12 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
+          const workbook = XLSX.read(data, { type: "array", cellDates: true, cellNF: true });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
 
-          // Convert to raw 2D array to detect the real header row
-          const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
+          // Convert to raw 2D array — keep Date objects as-is via raw:true
+          const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "", raw: true });
 
           // Find the first row where at least 3 non-empty cells exist and
           // it doesn't look like a merged title (most cells are empty/null)
