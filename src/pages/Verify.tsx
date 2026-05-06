@@ -165,20 +165,21 @@ const Verify = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <Helmet>
+        <title>{branding?.org_name ? `${branding.org_name} · Verify Certificate` : "Verify Certificate"}</title>
+        {logoUrl && <link rel="icon" href={logoUrl} />}
+      </Helmet>
       {/* Header */}
       <header className="border-b border-border bg-card">
-        <div className="container mx-auto flex items-center justify-between h-14 px-4">
-          <Link to="/" className="flex items-center gap-2">
+        <div className="container mx-auto flex items-center justify-center h-14 px-4">
+          <div className="flex items-center gap-2">
             {logoUrl ? (
               <img src={logoUrl} alt={displayName} className="h-7 w-7 rounded object-contain" />
             ) : (
               <ShieldCheck className="h-5 w-5 text-primary" />
             )}
             <span className="font-heading text-lg font-semibold text-foreground">{displayName}</span>
-          </Link>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/">Home</Link>
-          </Button>
+          </div>
         </div>
       </header>
 
