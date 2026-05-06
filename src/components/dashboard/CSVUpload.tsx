@@ -36,12 +36,12 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
       reader.onload = (e) => {
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
+          const workbook = XLSX.read(data, { type: "array", cellDates: true, cellNF: true });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
 
-          // Convert to raw 2D array to detect the real header row
-          const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "" });
+          // Convert to raw 2D array — keep Date objects as-is via raw:true
+          const rawRows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "", raw: true });
 
           // Find the first row where at least 3 non-empty cells exist and
           // it doesn't look like a merged title (most cells are empty/null)
@@ -66,6 +66,23 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           }
 
           const dataRows = rawRows.slice(headerRowIdx + 1);
+          const dateHeaderRe = /(date|dob|issued|expiry|valid|birth)/i;
+          const fmtDate = (d: Date) => {
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const dd = String(d.getUTCDate()).padStart(2, "0");
+            return `${dd} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+          };
+          const cellToString = (val: any, header: string): string => {
+            if (val === null || val === undefined || val === "") return "";
+            if (val instanceof Date) return fmtDate(val);
+            if (typeof val === "number" && dateHeaderRe.test(header) && val > 20000 && val < 80000) {
+              try {
+                const parsed: any = (XLSX as any).SSF?.parse_date_code?.(val);
+                if (parsed) return fmtDate(new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)));
+              } catch { /* noop */ }
+            }
+            return String(val).trim();
+          };
           const rows: Record<string, string>[] = [];
           for (const row of dataRows) {
             // Skip completely empty rows
@@ -73,7 +90,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
             if (nonEmpty === 0) continue;
             const cleaned: Record<string, string> = {};
             for (let ci = 0; ci < headers.length; ci++) {
-              cleaned[headers[ci]] = String(row[ci] ?? "").trim();
+              cleaned[headers[ci]] = cellToString(row[ci], headers[ci]);
             }
             rows.push(cleaned);
           }
