@@ -1,81 +1,64 @@
-I checked the actual rendering path, and the issue is not that your manual placement is wrong. The core problem is that the Template Builder canvas and the generated certificate do not render the same element geometry.
+# Fix plan — Excel dates, QR field filtering, and verify-page branding
 
-What is causing it:
+No database/schema changes. Frontend-only.
 
-1. The Template Builder text fields have extra UI padding around them:
-   - Builder field wrapper uses classes like `px-2 py-1`.
-   - Generated certificate text does not have that padding.
-   - Because the same `x/y` point is combined with `translate(...)`, that padding changes the visual center/left/right position in the builder. So you align it visually, save it, then generation uses a different box and it shifts.
+## 1. Excel dates show as `46118` instead of the real date
 
-2. The builder preview text is a placeholder like `{{field_key}}`, while generation uses real values like `Bibak Kumar`, `Rajendra Prasad Singh`, etc.
-   - Different text width means center/right aligned fields visibly move relative to the certificate background.
-   - This is especially obvious in your screenshot: values are placed over fixed printed labels like “Roll No.”, “Reg. No”, “With Grade”.
+**Root cause** — `src/components/dashboard/CSVUpload.tsx` calls `XLSX.read(data, { type: "array" })` and then `XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" })`. With these options, Excel date cells come back as raw serial numbers (e.g. `46118` = May 6, 2026). The number is then stored verbatim and printed on the certificate / verification page.
 
-3. Vertical anchoring is currently only “middle” using `translate(..., -50%)`.
-   - There is no stored vertical alignment mode such as top/middle/bottom/baseline.
-   - For text that needs to sit on a printed line, middle anchoring can look slightly up/down depending on font size, line-height, and actual glyph height.
+**Fix in `src/components/dashboard/CSVUpload.tsx`**
+- Pass `cellDates: true` and `cellNF: true` to `XLSX.read` so date cells become real `Date` objects.
+- When building each row, detect cells that are JS `Date` instances (or cells whose source format is a date format like `m/d/yy`, `dd-mm-yyyy`) and convert them to a clean `DD MMM YYYY` string (e.g. `06 May 2026`) using a small local formatter — no extra dependency.
+- Also handle the case where a value is a numeric serial that *looks like* an Excel date (4-5 digit integer in 20000–60000 range) for columns whose header contains `date`, `dob`, `issued`, `expiry`, `valid`. Convert those via `XLSX.SSF.parse_date_code(value)` to avoid the bug for sheets where the cell type was lost.
+- Trim and normalize the resulting string before pushing into `cleaned[headers[ci]]`.
 
-4. The app now generates PDF by capturing HTML with `html2canvas`, but the builder itself still hand-renders its own draggable DOM instead of using the exact shared certificate renderer. That leaves small but important style differences.
+This guarantees `recipient_data.date_of_issue` etc. is stored as a human string before it ever reaches the PDF or the verify page.
 
-Plan to fix this properly:
+## 2. QR-scan page shows every field instead of the selected ones
 
-1. Make Template Builder use the same text box geometry as generation
-   - Remove visual-impacting padding from draggable text fields.
-   - Move selection ring/hover styles to a non-layout overlay so they do not change the text box dimensions.
-   - Keep the existing guide lines and anchor dot, but make them represent the exact generated anchor point.
+**Root cause** — The selected `verification_fields` are saved on the template (already wired in `GenerateCertificates.tsx` line 302). The verify page does filter via `branding.verification_fields`, but only when that array is **non-empty**. When the user leaves the selector empty / on its default, the page falls back to "show everything except name/email". So the selection feels ignored.
 
-2. Add real sample-value preview in the Template Builder
-   - Show each field using either a sample value or the field label/template text, not only `{{field_key}}`.
-   - For template text like `S/O, D/O {{father_name}}`, show the surrounding fixed words plus a sample placeholder value.
-   - This will let users align the actual visible text length instead of aligning short placeholder tokens.
+**Fix in `src/pages/Verify.tsx`**
+- Treat `verification_fields` as authoritative whenever the RPC returns it (even an empty array means "show none of the optional fields").
+- Distinguish three cases:
+  - `verification_fields === null` → legacy / not configured → keep the current "show all non-PII" fallback.
+  - `verification_fields = []` → user explicitly chose "minimal view" → render only Holder, Issued by, Issue Date, ID, Status.
+  - `verification_fields = ["a","b"]` → render exactly those, in the order chosen.
+- Match keys case-insensitively and also against the matching template field label, so a selection saved as `Date Of Issue` still matches a CSV column key `date_of_issue`.
 
-3. Add vertical anchor controls
-   - Add a new `vertical_align` field for template fields with values:
-     - `top`
-     - `middle`
-     - `bottom`
-     - `baseline`
-   - Default existing fields to `middle` so current templates do not break.
-   - Add top/middle/bottom/baseline buttons in the Template Builder right sidebar.
-   - Update anchor guide labels to show both axes, e.g. `Pinned center / baseline`.
+**Fix in `src/pages/GenerateCertificates.tsx`**
+- Make sure the verification-fields multi-select sends the same canonical keys that end up as keys inside `recipient_data` (currently the UI may use display labels). Normalize both sides through one helper (`toFieldKey(label)`) to guarantee they line up.
+- Show a clear "These are the only fields that will be visible on the public verification page" hint above the selector so the user understands the toggle.
 
-4. Update shared rendering logic
-   - Replace the current hardcoded vertical `translateY(-50%)` with a shared function:
-     - top: no vertical translate
-     - middle: `translateY(-50%)`
-     - bottom: `translateY(-100%)`
-     - baseline: position the baseline at the saved Y coordinate using consistent line-height math
-   - Use this same logic in:
-     - Template Builder
-     - Certificate preview
-     - Generated PDF renderer
+## 3. Verify page feels like CertifyPro, not the issuer's site
 
-5. Preserve horizontal alignment behavior
-   - Keep the horizontal part that worked well:
-     - left = x is left edge
-     - center = x is center
-     - right = x is right edge
-   - Only combine it with the new vertical anchor logic.
+**Root cause** — `src/pages/Verify.tsx` always shows:
+- a `Home` button linking back to `/` (the CertifyPro landing page),
+- the wordmark links to `/`,
+- a footer that says `Powered by CertifyPro`.
 
-6. Fix image/system element parity too
-   - Make Builder logo/signature/seal sizes match generated sizes by using saved width/height values in the canvas, not only hardcoded Tailwind heights.
-   - Keep QR / Certificate ID / Org Name using the same shared dimensions/styles where possible.
+The brand only swaps the org name + logo, so visitors still feel they are on a third-party site.
 
-7. Add a focused regression check
-   - Add tests for the shared transform/anchor function so left/center/right plus top/middle/bottom/baseline produce expected transforms/styles.
-   - Manually verify with a template like your screenshot: name, father name, roll number, reg number, date, course, grade, company name.
+**Fix in `src/pages/Verify.tsx`** (UI / presentation only)
+- Remove the `Home` button entirely from the header.
+- Make the logo + wordmark a non-link `div` (no navigation away from the verification context).
+- Replace the wordmark text with `branding.org_name` as soon as it loads, falling back to a neutral `Certificate Verification` (instead of `CertifyPro`) while loading.
+- Tweak the page `<title>` and `<meta>` via `react-helmet-async` to `"<Org Name> · Verify Certificate"` once branding loads.
+- Footer: drop the `Powered by CertifyPro` line by default. Keep a very small, muted `Verification powered by CertifyPro` only when `branding` is missing (so unbranded fallback still has attribution). Make the issuer-branded version read just `Verified by <Org Name>`.
+- Use the org logo as the favicon at runtime by injecting a `<link rel="icon">` tag when `branding.org_logo_url` is present, so the browser tab also looks like the issuer.
+- Keep the verification result card style intact (no design overhaul) — only header/footer/links change.
 
-Files expected to change:
-- `src/pages/TemplateBuilder.tsx`
-- `src/lib/certificate-layout.ts`
-- `src/lib/certificate-html-renderer.ts`
-- `src/lib/certificate-generator.ts`
-- `src/components/CertificatePreview.tsx`
-- `src/pages/GenerateCertificates.tsx`
-- a Lovable Cloud database migration for `template_fields.vertical_align`
+## Files expected to change
+- `src/components/dashboard/CSVUpload.tsx` — date-aware Excel parsing.
+- `src/pages/GenerateCertificates.tsx` — canonicalize verification field keys + helper hint.
+- `src/pages/Verify.tsx` — strict whitelist filtering, white-label header/footer, dynamic favicon + title.
 
-Expected result:
-- The point you pin in the builder will be the same point used in the generated certificate.
-- Horizontal alignment will stay stable.
-- Vertical alignment will be explicit instead of forced-middle.
-- Printed-form style certificates like your uploaded example can use `baseline` anchoring, which is the correct mode for aligning text to pre-printed labels/lines.
+## Out of scope
+- No database migrations.
+- No changes to the PDF/QR generator (it already encodes the verify URL; the perception fix lives on the verify page).
+- No changes to template builder or auth.
+
+## Expected result
+- Excel cells like `06/05/2026` render as `06 May 2026` on certificate + verification.
+- The verification page strictly shows only the fields the issuer ticked, in their chosen order.
+- The verification page reads as the issuer's own page — their logo, their name in the title bar, no `Home` button, no `CertifyPro` wordmark in the prominent positions.
