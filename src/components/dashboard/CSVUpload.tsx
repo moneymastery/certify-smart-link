@@ -66,6 +66,23 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           }
 
           const dataRows = rawRows.slice(headerRowIdx + 1);
+          const dateHeaderRe = /(date|dob|issued|expiry|valid|birth)/i;
+          const fmtDate = (d: Date) => {
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const dd = String(d.getUTCDate()).padStart(2, "0");
+            return `${dd} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+          };
+          const cellToString = (val: any, header: string): string => {
+            if (val === null || val === undefined || val === "") return "";
+            if (val instanceof Date) return fmtDate(val);
+            if (typeof val === "number" && dateHeaderRe.test(header) && val > 20000 && val < 80000) {
+              try {
+                const parsed: any = (XLSX as any).SSF?.parse_date_code?.(val);
+                if (parsed) return fmtDate(new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)));
+              } catch { /* noop */ }
+            }
+            return String(val).trim();
+          };
           const rows: Record<string, string>[] = [];
           for (const row of dataRows) {
             // Skip completely empty rows
@@ -73,7 +90,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
             if (nonEmpty === 0) continue;
             const cleaned: Record<string, string> = {};
             for (let ci = 0; ci < headers.length; ci++) {
-              cleaned[headers[ci]] = String(row[ci] ?? "").trim();
+              cleaned[headers[ci]] = cellToString(row[ci], headers[ci]);
             }
             rows.push(cleaned);
           }
