@@ -64,8 +64,14 @@ export const getTextAnchorTop = (
  * Strip control characters (newlines, tabs, etc.) that WinAnsi / pdf-lib
  * cannot encode.  Collapses runs of whitespace into a single space.
  */
-export const sanitizeText = (text: string): string =>
-  text?.replace(/[\r\n\x00-\x1F\x7F-\x9F]+/g, " ").replace(/\s{2,}/g, " ").trim() || "";
+export const sanitizeText = (text: unknown): string => {
+  if (text === null || text === undefined) return "";
+  const str = typeof text === "string" ? text : String(text);
+  return str
+    .replace(/[\r\n\t\v\f\x00-\x1F\x7F-\x9F\u2028\u2029]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
 
 // ── Field value resolution ────────────────────────────────────────
 export interface FieldDescriptor {
