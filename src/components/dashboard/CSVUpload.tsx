@@ -27,7 +27,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
       setRowCount(rows.length);
       onDataParsed(headers, rows);
     },
-    [onDataParsed]
+    [onDataParsed],
   );
 
   const parseExcel = useCallback(
@@ -57,7 +57,11 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
 
           const headerRow = rawRows[headerRowIdx];
           const headers = headerRow
-            .map((h: any) => String(h ?? "").replace(/[\r\n]+/g, " ").trim())
+            .map((h: any) =>
+              String(h ?? "")
+                .replace(/[\r\n]+/g, " ")
+                .trim(),
+            )
             .filter((h: string) => h.length > 0);
 
           if (headers.length === 0) {
@@ -68,9 +72,11 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           const dataRows = rawRows.slice(headerRowIdx + 1);
           const dateHeaderRe = /(date|dob|issued|expiry|valid|birth)/i;
           const fmtDate = (d: Date) => {
-            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            const dd = String(d.getUTCDate()).padStart(2, "0");
-            return `${dd} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            // Use LOCAL time methods, not UTC — XLSX creates Date objects at local midnight.
+            // Using getUTCDate() shifts the date back 1 day for IST (+5:30) users.
+            const dd = String(d.getDate()).padStart(2, "0");
+            return `${dd} ${months[d.getMonth()]} ${d.getFullYear()}`;
           };
           const cellToString = (val: any, header: string): string => {
             if (val === null || val === undefined || val === "") return "";
@@ -78,8 +84,11 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
             if (typeof val === "number" && dateHeaderRe.test(header) && val > 20000 && val < 80000) {
               try {
                 const parsed: any = (XLSX as any).SSF?.parse_date_code?.(val);
-                if (parsed) return fmtDate(new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d)));
-              } catch { /* noop */ }
+                // Use local date (not UTC) so timezone offsets don't shift the day
+                if (parsed) return fmtDate(new Date(parsed.y, parsed.m - 1, parsed.d));
+              } catch {
+                /* noop */
+              }
             }
             return String(val).trim();
           };
@@ -102,7 +111,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
       };
       reader.readAsArrayBuffer(file);
     },
-    [processRows]
+    [processRows],
   );
 
   const parseCSV = useCallback(
@@ -112,9 +121,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
         skipEmptyLines: "greedy",
         transformHeader: (h) => h.trim(),
         complete: (results) => {
-          const fatalErrors = results.errors.filter(
-            (e) => e.type !== "FieldMismatch"
-          );
+          const fatalErrors = results.errors.filter((e) => e.type !== "FieldMismatch");
           if (fatalErrors.length > 0) {
             setError(`CSV parse error: ${fatalErrors[0].message}`);
             return;
@@ -124,7 +131,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
         },
       });
     },
-    [processRows]
+    [processRows],
   );
 
   const parseFile = useCallback(
@@ -147,7 +154,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
         parseCSV(file);
       }
     },
-    [parseExcel, parseCSV]
+    [parseExcel, parseCSV],
   );
 
   const handleDrop = useCallback(
@@ -157,7 +164,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
       const file = e.dataTransfer.files[0];
       if (file) parseFile(file);
     },
-    [parseFile]
+    [parseFile],
   );
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,8 +185,8 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           dragging
             ? "border-accent bg-accent/5"
             : fileName
-            ? "border-accent/40 bg-accent/5"
-            : "border-border bg-muted/30"
+              ? "border-accent/40 bg-accent/5"
+              : "border-border bg-muted/30"
         }`}
       >
         {fileName ? (
@@ -192,9 +199,7 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
           <div className="space-y-3">
             <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
             <div>
-              <p className="text-sm font-medium text-foreground">
-                Drop your file here
-              </p>
+              <p className="text-sm font-medium text-foreground">Drop your file here</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Supports CSV, XLSX, and XLS. Must include a "name" column.
               </p>
