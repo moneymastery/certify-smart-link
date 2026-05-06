@@ -251,11 +251,12 @@ export const generateCertificatePDF = async (
     const lines = (isTemplateText && f.maxWidth) ? wrapText(val, measure, f.maxWidth) : [val];
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+      const line = sanitizeText(lines[i]);
+      if (!line) continue;
       const lineW = measure(line);
       const px = computePdfTextX(config.width, f.xPosition, lineW, f.textAlign);
       const py = computePdfBaselineY(config.height, f.yPosition, f.fontSize, lines.length, i);
-      
+
       page.drawText(line, {
         x: px,
         y: py,
