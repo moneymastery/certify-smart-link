@@ -212,7 +212,19 @@ const TemplateBuilder = () => {
           setTimeout(() => { resolveOrgPromise = null; }, 1000);
         }
       }
-      if (org) setOrgId(org.id);
+      if (org) {
+        setOrgId(org.id);
+        // Fetch current org name + logo so the user can edit them
+        const { data: orgRow } = await supabase
+          .from("organizations")
+          .select("name, logo_url")
+          .eq("id", org.id)
+          .single();
+        if (orgRow) {
+          setOrgName(orgRow.name || "");
+          setOrgLogoUrl((orgRow as any).logo_url || null);
+        }
+      }
     };
     getOrg();
   }, [user]);
