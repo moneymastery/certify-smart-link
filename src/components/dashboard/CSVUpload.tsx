@@ -71,26 +71,41 @@ const CSVUpload = ({ onDataParsed }: CSVUploadProps) => {
 
           const dataRows = rawRows.slice(headerRowIdx + 1);
           const dateHeaderRe = /(date|dob|issued|expiry|valid|birth)/i;
-          const fmtDate = (d: Date) => {
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            // Use LOCAL time methods, not UTC — XLSX creates Date objects at local midnight.
-            // Using getUTCDate() shifts the date back 1 day for IST (+5:30) users.
-            const dd = String(d.getDate()).padStart(2, "0");
-            return `${dd} ${months[d.getMonth()]} ${d.getFullYear()}`;
-          };
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const fmtYMD = (y: number, m: number, d: number) =>
+            `${String(d).padStart(2, "0")} ${months[m]} ${y}`;
+          // XLSX with cellDates:true returns Date objects at UTC midnight of the
+          // cell's calendar date. Use UTC components so the day doesn't shift in
+          // negative-offset timezones (Americas) or positive ones (Asia).
+          const fmtDate = (d: Date) => fmtYMD(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
           const cellToString = (val: any, header: string): string => {
             if (val === null || val === undefined || val === "") return "";
             if (val instanceof Date) return fmtDate(val);
             if (typeof val === "number" && dateHeaderRe.test(header) && val > 20000 && val < 80000) {
               try {
                 const parsed: any = (XLSX as any).SSF?.parse_date_code?.(val);
-                // Use local date (not UTC) so timezone offsets don't shift the day
-                if (parsed) return fmtDate(new Date(parsed.y, parsed.m - 1, parsed.d));
+                if (parsed) return fmtYMD(parsed.y, parsed.m - 1, parsed.d);
               } catch {
                 /* noop */
               }
             }
-            return String(val).trim();
+            // Handle pre-formatted date strings like "5/20/2026", "20-05-2026", "2026-05-20"
+            const str = String(val).trim();
+            if (dateHeaderRe.test(header)) {
+              const iso = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+              if (iso) return fmtYMD(+iso[1], +iso[2] - 1, +iso[3]);
+              const dmy = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+              if (dmy) {
+                let [, a, b, y] = dmy;
+                let yr = +y; if (yr < 100) yr += 2000;
+                // Ambiguous: assume DD/MM/YYYY when first part > 12, else MM/DD/YYYY
+                const ai = +a, bi = +b;
+                const day = ai > 12 ? ai : bi > 12 ? bi : ai; // prefer DMY for non-US
+                const mon = ai > 12 ? bi : bi > 12 ? ai : bi;
+                if (mon >= 1 && mon <= 12 && day >= 1 && day <= 31) return fmtYMD(yr, mon - 1, day);
+              }
+            }
+            return str;
           };
           const rows: Record<string, string>[] = [];
           for (const row of dataRows) {
