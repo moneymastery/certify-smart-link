@@ -460,6 +460,17 @@ const TemplateBuilder = () => {
     } as any;
 
     try {
+      // Persist organization branding (name + logo) so it appears on the verify page
+      if (orgId) {
+        const orgUpdate: any = {};
+        if (orgName.trim()) orgUpdate.name = orgName.trim();
+        orgUpdate.logo_url = orgLogoUrl;
+        const { error: orgErr } = await supabase
+          .from("organizations")
+          .update(orgUpdate)
+          .eq("id", orgId);
+        if (orgErr) console.warn("Failed to update organization branding", orgErr);
+      }
       let templateId: string;
 
       if (isEditMode && editId) {
