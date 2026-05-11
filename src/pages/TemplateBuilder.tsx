@@ -561,6 +561,30 @@ const TemplateBuilder = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - uploads */}
         <aside className="hidden md:block w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
+          <div className="space-y-2 pb-4 border-b border-border">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issuer</h3>
+            <div className="space-y-1">
+              <Label className="text-xs">Organization Name</Label>
+              <Input
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="Your organization"
+                className="h-8 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Shown as "Issued by" on the verification page.</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Organization Logo URL</Label>
+              <Input
+                value={orgLogoUrl ?? ""}
+                onChange={(e) => setOrgLogoUrl(e.target.value || null)}
+                placeholder="https://…/logo.png"
+                className="h-8 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Appears in the verify page header + favicon.</p>
+            </div>
+          </div>
+
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assets</h3>
 
           {[
