@@ -124,6 +124,8 @@ const TemplateBuilder = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("");
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
   const childClickedRef = useRef(false);
 
   const CANVAS_WIDTH = 842;
