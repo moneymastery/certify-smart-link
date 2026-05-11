@@ -124,6 +124,8 @@ const TemplateBuilder = () => {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("");
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
   const childClickedRef = useRef(false);
 
   const CANVAS_WIDTH = 842;
@@ -210,7 +212,19 @@ const TemplateBuilder = () => {
           setTimeout(() => { resolveOrgPromise = null; }, 1000);
         }
       }
-      if (org) setOrgId(org.id);
+      if (org) {
+        setOrgId(org.id);
+        // Fetch current org name + logo so the user can edit them
+        const { data: orgRow } = await supabase
+          .from("organizations")
+          .select("name, logo_url")
+          .eq("id", org.id)
+          .single();
+        if (orgRow) {
+          setOrgName(orgRow.name || "");
+          setOrgLogoUrl((orgRow as any).logo_url || null);
+        }
+      }
     };
     getOrg();
   }, [user]);
@@ -446,6 +460,17 @@ const TemplateBuilder = () => {
     } as any;
 
     try {
+      // Persist organization branding (name + logo) so it appears on the verify page
+      if (orgId) {
+        const orgUpdate: any = {};
+        if (orgName.trim()) orgUpdate.name = orgName.trim();
+        orgUpdate.logo_url = orgLogoUrl;
+        const { error: orgErr } = await supabase
+          .from("organizations")
+          .update(orgUpdate)
+          .eq("id", orgId);
+        if (orgErr) console.warn("Failed to update organization branding", orgErr);
+      }
       let templateId: string;
 
       if (isEditMode && editId) {
@@ -536,6 +561,30 @@ const TemplateBuilder = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left sidebar - uploads */}
         <aside className="hidden md:block w-60 border-r border-border bg-card p-4 space-y-5 overflow-y-auto shrink-0">
+          <div className="space-y-2 pb-4 border-b border-border">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Issuer</h3>
+            <div className="space-y-1">
+              <Label className="text-xs">Organization Name</Label>
+              <Input
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="Your organization"
+                className="h-8 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Shown as "Issued by" on the verification page.</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Organization Logo URL</Label>
+              <Input
+                value={orgLogoUrl ?? ""}
+                onChange={(e) => setOrgLogoUrl(e.target.value || null)}
+                placeholder="https://…/logo.png"
+                className="h-8 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground">Appears in the verify page header + favicon.</p>
+            </div>
+          </div>
+
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assets</h3>
 
           {[
