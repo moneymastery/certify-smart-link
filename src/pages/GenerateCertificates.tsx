@@ -325,11 +325,39 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
-    // Save selected verification fields to the template
-    await supabase
+    // Translate the user's whitelist (which is stored as CSV header names for a
+    // familiar picker UX) into canonical field_keys so the verify page can match
+    // them against recipient_data (which is now also keyed by field_key). This
+    // is the fix for "QR shows different / missing fields after CSV headers
+    // change slightly".
+    const headerToFieldKey: Record<string, string> = {};
+    for (const [fk, csvCol] of Object.entries(fieldMapping)) {
+      if (csvCol) headerToFieldKey[csvCol] = fk;
+    }
+    // Also allow recipient_name / recipient_email to remain visible if picked
+    if (nameColumn) headerToFieldKey[nameColumn] = "recipient_name";
+    const canonicalVerificationFields = Array.from(
+      new Set(
+        verificationFields
+          .map((h) => headerToFieldKey[h] || h)
+          .filter((v) => !!v && v.trim().length > 0),
+      ),
+    );
+
+    // Save selected verification fields to the template (canonical form)
+    const { error: whitelistErr } = await supabase
       .from("templates")
-      .update({ verification_fields: verificationFields } as any)
+      .update({ verification_fields: canonicalVerificationFields } as any)
       .eq("id", templateId);
+    if (whitelistErr) {
+      toast({
+        title: "Could not save verification-fields selection",
+        description: `${whitelistErr.message}. Aborting so the QR page does not show stale fields.`,
+        variant: "destructive",
+      });
+      setStep("configure");
+      return;
+    }
 
     const [templateResult, fieldsResult] = await Promise.all([
       supabase.from("templates").select("*").eq("id", templateId).single(),
@@ -358,27 +386,38 @@ const GenerateCertificates = () => {
       return;
     }
 
-    // Build recipientData using field mapping so only mapped fields get values.
+    // Build recipientData using ONLY the field mapping — never spread raw CSV
+    // headers in. Storing both raw headers AND field_keys leads to duplicate
+    // values under different keys (e.g. `Fathers name` AND `course` both holding
+    // the same string), which the verification page and exports then mis-render.
     // Sanitize ALL values at ingestion so control characters (e.g. newlines from
     // CSV quoted cells) can never reach pdf-lib's WinAnsi encoder.
     const batchRows = csvRows.map((row) => {
-      // Sanitize the raw row first so every downstream consumer is clean
       const cleanRow: Record<string, string> = {};
       for (const [k, v] of Object.entries(row)) {
         cleanRow[k] = sanitizeText(v);
       }
 
       const mappedData: Record<string, string> = {};
-      // Map all field keys AND placeholder variable names to their CSV values
+      // 1) Every mapped template field / placeholder → keyed by canonical field_key
       for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
         if (csvCol && cleanRow[csvCol] != null) {
           mappedData[fieldKey] = cleanRow[csvCol];
         }
       }
+      // 2) Any whitelisted CSV column that isn't mapped to a template field —
+      //    still include it (keyed by its canonical field_key = the header name)
+      //    so the verify page can display it.
+      for (const h of verificationFields) {
+        const fk = headerToFieldKey[h] || h;
+        if (!(fk in mappedData) && cleanRow[h] != null) {
+          mappedData[fk] = cleanRow[h];
+        }
+      }
       return {
         recipientName: sanitizeText(cleanRow[nameColumn] || "") || "Unknown",
         recipientEmail: emailColumn ? cleanRow[emailColumn] : undefined,
-        recipientData: { ...cleanRow, ...mappedData },
+        recipientData: mappedData,
       };
     });
 
