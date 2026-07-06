@@ -463,6 +463,42 @@ const TemplateBuilder = () => {
 
   const handleSave = async () => {
     if (!user || !orgId) return;
+
+    // Guard 1: never save an empty template — this is the main cause of the
+    // "template we saved is not showing" bug when combined with delete-then-insert.
+    if (fields.length === 0) {
+      toast({
+        title: "Cannot save empty template",
+        description: "Add at least one field before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Guard 2: reject duplicate field_keys — they cause value cross-contamination
+    // on the verification page and in exports.
+    const keys = fields.map((f) => f.fieldKey);
+    const seen = new Set<string>();
+    for (const k of keys) {
+      if (!k || !k.trim()) {
+        toast({
+          title: "Invalid field key",
+          description: "Every field needs a non-empty field key.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (seen.has(k)) {
+        toast({
+          title: "Duplicate field key",
+          description: `Field key "${k}" is used more than once. Field keys must be unique.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      seen.add(k);
+    }
+
     setSaving(true);
 
     const templatePayload = {
@@ -496,6 +532,10 @@ const TemplateBuilder = () => {
       org_name_y: orgNamePos.y,
     } as any;
 
+    // Snapshot for rollback if the field re-insert fails after we've deleted the old rows
+    let oldFieldRows: any[] = [];
+    let deletedOldRows = false;
+
     try {
       // Persist organization branding (name + logo) so it appears on the verify page
       if (orgId) {
@@ -519,8 +559,21 @@ const TemplateBuilder = () => {
         if (tmplErr) throw tmplErr;
         templateId = editId;
 
-        // Delete old fields and re-insert
-        await supabase.from("template_fields").delete().eq("template_id", editId);
+        // Snapshot current field rows BEFORE deleting, so we can restore them
+        // if the subsequent insert fails (network / RLS / validation errors).
+        const { data: oldData, error: oldErr } = await supabase
+          .from("template_fields")
+          .select("*")
+          .eq("template_id", editId);
+        if (oldErr) throw oldErr;
+        oldFieldRows = oldData || [];
+
+        const { error: delErr } = await supabase
+          .from("template_fields")
+          .delete()
+          .eq("template_id", editId);
+        if (delErr) throw delErr;
+        deletedOldRows = true;
       } else {
         // Create new template
         const { data: template, error: tmplErr } = await supabase
@@ -548,11 +601,40 @@ const TemplateBuilder = () => {
       }));
 
       const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows as any);
-      if (fieldsErr) throw fieldsErr;
+      if (fieldsErr) {
+        // Rollback: template must not be left field-less.
+        if (deletedOldRows && oldFieldRows.length > 0) {
+          const restoreRows = oldFieldRows.map(({ id: _drop, ...rest }: any) => rest);
+          const { error: restoreErr } = await supabase.from("template_fields").insert(restoreRows);
+          if (restoreErr) {
+            console.error("CRITICAL: rollback failed, template has no fields", restoreErr);
+            toast({
+              title: "Save failed — please contact support",
+              description: `Fields could not be saved AND the old fields could not be restored. Template id: ${templateId}. Do not close this tab.`,
+              variant: "destructive",
+            });
+            setSaving(false);
+            return; // keep editor open with in-memory fields intact
+          }
+        }
+        throw fieldsErr;
+      }
 
       toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
       navigate("/dashboard");
     } catch (error: any) {
+      toast({
+        title: "Error saving template",
+        description:
+          (error?.message || "Save failed.") +
+          " Your changes are still in the editor — please try again.",
+        variant: "destructive",
+      });
+      // Deliberately do NOT navigate away — user keeps their in-memory work.
+    } finally {
+      setSaving(false);
+    }
+  };
       toast({ title: "Error saving template", description: error.message, variant: "destructive" });
     } finally {
       setSaving(false);
