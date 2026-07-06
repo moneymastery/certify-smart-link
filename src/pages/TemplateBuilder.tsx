@@ -635,11 +635,6 @@ const TemplateBuilder = () => {
       setSaving(false);
     }
   };
-      toast({ title: "Error saving template", description: error.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const selectedFieldData = fields.find((f) => f.id === selectedField);
 
