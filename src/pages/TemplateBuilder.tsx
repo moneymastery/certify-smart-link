@@ -34,7 +34,13 @@ interface FieldItem {
   textAlign: string;
   verticalAlign: "top" | "middle" | "bottom" | "baseline";
   maxWidth: number | null;
+  /** true → user manually set the fieldKey; do not auto-derive from label */
+  keyLocked?: boolean;
 }
+
+/** Slugify a label into a safe, unique field_key */
+const slugifyKey = (s: string): string =>
+  (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field";
 
 interface AssetPosition {
   x: number;
@@ -272,6 +278,10 @@ const TemplateBuilder = () => {
           textAlign: f.text_align,
           verticalAlign: f.vertical_align || "middle",
           maxWidth: f.max_width,
+          // Fields loaded from DB have already been used to generate certificates —
+          // lock their keys so a later label edit doesn't silently rename them and
+          // break existing recipient_data lookups.
+          keyLocked: true,
         }));
         if (loadedFields.length > 0) setFields(loadedFields);
       } catch (err: any) {
@@ -396,6 +406,8 @@ const TemplateBuilder = () => {
       textAlign: "center",
       verticalAlign: "middle",
       maxWidth: null,
+      // Newly-added fields → auto-derive fieldKey from label until user manually edits it
+      keyLocked: false,
     };
     setFields([...fields, newField]);
     setSelectedField(newField.id);
@@ -408,7 +420,32 @@ const TemplateBuilder = () => {
   };
 
   const updateField = (id: string, updates: Partial<FieldItem>) => {
-    setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+    setFields((prev) =>
+      prev.map((f) => {
+        if (f.id !== id) return f;
+        const next: FieldItem = { ...f, ...updates };
+        // Auto-sync fieldKey from label (unless recipient_name or user has locked the key)
+        if (
+          updates.label !== undefined &&
+          !f.keyLocked &&
+          f.fieldKey !== "recipient_name" &&
+          updates.fieldKey === undefined
+        ) {
+          const base = slugifyKey(updates.label);
+          let candidate = base;
+          let n = 2;
+          while (prev.some((o) => o.id !== id && o.fieldKey === candidate)) {
+            candidate = `${base}_${n++}`;
+          }
+          next.fieldKey = candidate;
+        }
+        // If user edits fieldKey directly, lock it so future label edits don't override
+        if (updates.fieldKey !== undefined && updates.fieldKey !== f.fieldKey) {
+          next.keyLocked = true;
+        }
+        return next;
+      }),
+    );
   };
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
@@ -426,6 +463,42 @@ const TemplateBuilder = () => {
 
   const handleSave = async () => {
     if (!user || !orgId) return;
+
+    // Guard 1: never save an empty template — this is the main cause of the
+    // "template we saved is not showing" bug when combined with delete-then-insert.
+    if (fields.length === 0) {
+      toast({
+        title: "Cannot save empty template",
+        description: "Add at least one field before saving.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Guard 2: reject duplicate field_keys — they cause value cross-contamination
+    // on the verification page and in exports.
+    const keys = fields.map((f) => f.fieldKey);
+    const seen = new Set<string>();
+    for (const k of keys) {
+      if (!k || !k.trim()) {
+        toast({
+          title: "Invalid field key",
+          description: "Every field needs a non-empty field key.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (seen.has(k)) {
+        toast({
+          title: "Duplicate field key",
+          description: `Field key "${k}" is used more than once. Field keys must be unique.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      seen.add(k);
+    }
+
     setSaving(true);
 
     const templatePayload = {
@@ -459,6 +532,10 @@ const TemplateBuilder = () => {
       org_name_y: orgNamePos.y,
     } as any;
 
+    // Snapshot for rollback if the field re-insert fails after we've deleted the old rows
+    let oldFieldRows: any[] = [];
+    let deletedOldRows = false;
+
     try {
       // Persist organization branding (name + logo) so it appears on the verify page
       if (orgId) {
@@ -482,8 +559,21 @@ const TemplateBuilder = () => {
         if (tmplErr) throw tmplErr;
         templateId = editId;
 
-        // Delete old fields and re-insert
-        await supabase.from("template_fields").delete().eq("template_id", editId);
+        // Snapshot current field rows BEFORE deleting, so we can restore them
+        // if the subsequent insert fails (network / RLS / validation errors).
+        const { data: oldData, error: oldErr } = await supabase
+          .from("template_fields")
+          .select("*")
+          .eq("template_id", editId);
+        if (oldErr) throw oldErr;
+        oldFieldRows = oldData || [];
+
+        const { error: delErr } = await supabase
+          .from("template_fields")
+          .delete()
+          .eq("template_id", editId);
+        if (delErr) throw delErr;
+        deletedOldRows = true;
       } else {
         // Create new template
         const { data: template, error: tmplErr } = await supabase
@@ -511,12 +601,36 @@ const TemplateBuilder = () => {
       }));
 
       const { error: fieldsErr } = await supabase.from("template_fields").insert(fieldRows as any);
-      if (fieldsErr) throw fieldsErr;
+      if (fieldsErr) {
+        // Rollback: template must not be left field-less.
+        if (deletedOldRows && oldFieldRows.length > 0) {
+          const restoreRows = oldFieldRows.map(({ id: _drop, ...rest }: any) => rest);
+          const { error: restoreErr } = await supabase.from("template_fields").insert(restoreRows);
+          if (restoreErr) {
+            console.error("CRITICAL: rollback failed, template has no fields", restoreErr);
+            toast({
+              title: "Save failed — please contact support",
+              description: `Fields could not be saved AND the old fields could not be restored. Template id: ${templateId}. Do not close this tab.`,
+              variant: "destructive",
+            });
+            setSaving(false);
+            return; // keep editor open with in-memory fields intact
+          }
+        }
+        throw fieldsErr;
+      }
 
       toast({ title: "Template saved!", description: isEditMode ? "Template updated." : "Template created." });
       navigate("/dashboard");
     } catch (error: any) {
-      toast({ title: "Error saving template", description: error.message, variant: "destructive" });
+      toast({
+        title: "Error saving template",
+        description:
+          (error?.message || "Save failed.") +
+          " Your changes are still in the editor — please try again.",
+        variant: "destructive",
+      });
+      // Deliberately do NOT navigate away — user keeps their in-memory work.
     } finally {
       setSaving(false);
     }

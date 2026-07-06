@@ -251,25 +251,37 @@ const GenerateCertificates = () => {
         .eq("template_id", templateId)
         .order("sort_order");
       setTemplateFields(data || []);
-      // Auto-map: match field_key AND placeholder vars to CSV headers (case-insensitive, with underscore/space normalization)
+      // Auto-map: match on field_key AND label AND placeholder vars (case-insensitive,
+      // ignoring spaces/underscores/dashes/dots). Matching against the LABEL is the
+      // key improvement — most templates have opaque field_keys like `field_4` but
+      // human labels like "Roll No" that line up with the CSV header.
       if (data && csvHeaders.length > 0) {
         const autoMap: Record<string, string> = {};
-        const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
-        const targets: { key: string; label: string }[] = [];
+        const normalize = (s: string) => (s || "").toLowerCase().replace(/[\s_\-.]+/g, "");
+        const targets: { key: string; matchers: string[]; label: string }[] = [];
         for (const f of data) {
           if (f.field_key === "recipient_name") continue;
           if (!f.label.includes("{{")) {
-            targets.push({ key: f.field_key, label: f.label });
+            // Try to match on both the field_key and the human label
+            targets.push({
+              key: f.field_key,
+              matchers: [f.field_key, f.label].filter(Boolean),
+              label: f.label,
+            });
           }
           const matches = f.label.matchAll(/\{\{(\w+)\}\}/g);
           for (const m of matches) {
-            targets.push({ key: m[1], label: `{{${m[1]}}}` });
+            targets.push({ key: m[1], matchers: [m[1]], label: `{{${m[1]}}}` });
           }
         }
         const unmatched: string[] = [];
         for (const t of targets) {
           if (autoMap[t.key]) continue;
-          const match = csvHeaders.find((h) => normalize(h) === normalize(t.key));
+          const normalizedMatchers = t.matchers.map(normalize);
+          const match = csvHeaders.find((h) => {
+            const nh = normalize(h);
+            return normalizedMatchers.some((nm) => nm === nh);
+          });
           if (match) autoMap[t.key] = match;
           else unmatched.push(t.label);
         }
@@ -313,11 +325,39 @@ const GenerateCertificates = () => {
 
     setStep("generating");
 
-    // Save selected verification fields to the template
-    await supabase
+    // Translate the user's whitelist (which is stored as CSV header names for a
+    // familiar picker UX) into canonical field_keys so the verify page can match
+    // them against recipient_data (which is now also keyed by field_key). This
+    // is the fix for "QR shows different / missing fields after CSV headers
+    // change slightly".
+    const headerToFieldKey: Record<string, string> = {};
+    for (const [fk, csvCol] of Object.entries(fieldMapping)) {
+      if (csvCol) headerToFieldKey[csvCol] = fk;
+    }
+    // Also allow recipient_name / recipient_email to remain visible if picked
+    if (nameColumn) headerToFieldKey[nameColumn] = "recipient_name";
+    const canonicalVerificationFields = Array.from(
+      new Set(
+        verificationFields
+          .map((h) => headerToFieldKey[h] || h)
+          .filter((v) => !!v && v.trim().length > 0),
+      ),
+    );
+
+    // Save selected verification fields to the template (canonical form)
+    const { error: whitelistErr } = await supabase
       .from("templates")
-      .update({ verification_fields: verificationFields } as any)
+      .update({ verification_fields: canonicalVerificationFields } as any)
       .eq("id", templateId);
+    if (whitelistErr) {
+      toast({
+        title: "Could not save verification-fields selection",
+        description: `${whitelistErr.message}. Aborting so the QR page does not show stale fields.`,
+        variant: "destructive",
+      });
+      setStep("configure");
+      return;
+    }
 
     const [templateResult, fieldsResult] = await Promise.all([
       supabase.from("templates").select("*").eq("id", templateId).single(),
@@ -346,27 +386,38 @@ const GenerateCertificates = () => {
       return;
     }
 
-    // Build recipientData using field mapping so only mapped fields get values.
+    // Build recipientData using ONLY the field mapping — never spread raw CSV
+    // headers in. Storing both raw headers AND field_keys leads to duplicate
+    // values under different keys (e.g. `Fathers name` AND `course` both holding
+    // the same string), which the verification page and exports then mis-render.
     // Sanitize ALL values at ingestion so control characters (e.g. newlines from
     // CSV quoted cells) can never reach pdf-lib's WinAnsi encoder.
     const batchRows = csvRows.map((row) => {
-      // Sanitize the raw row first so every downstream consumer is clean
       const cleanRow: Record<string, string> = {};
       for (const [k, v] of Object.entries(row)) {
         cleanRow[k] = sanitizeText(v);
       }
 
       const mappedData: Record<string, string> = {};
-      // Map all field keys AND placeholder variable names to their CSV values
+      // 1) Every mapped template field / placeholder → keyed by canonical field_key
       for (const [fieldKey, csvCol] of Object.entries(fieldMapping)) {
         if (csvCol && cleanRow[csvCol] != null) {
           mappedData[fieldKey] = cleanRow[csvCol];
         }
       }
+      // 2) Any whitelisted CSV column that isn't mapped to a template field —
+      //    still include it (keyed by its canonical field_key = the header name)
+      //    so the verify page can display it.
+      for (const h of verificationFields) {
+        const fk = headerToFieldKey[h] || h;
+        if (!(fk in mappedData) && cleanRow[h] != null) {
+          mappedData[fk] = cleanRow[h];
+        }
+      }
       return {
         recipientName: sanitizeText(cleanRow[nameColumn] || "") || "Unknown",
         recipientEmail: emailColumn ? cleanRow[emailColumn] : undefined,
-        recipientData: { ...cleanRow, ...mappedData },
+        recipientData: mappedData,
       };
     });
 
