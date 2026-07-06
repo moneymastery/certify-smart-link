@@ -406,6 +406,8 @@ const TemplateBuilder = () => {
       textAlign: "center",
       verticalAlign: "middle",
       maxWidth: null,
+      // Newly-added fields → auto-derive fieldKey from label until user manually edits it
+      keyLocked: false,
     };
     setFields([...fields, newField]);
     setSelectedField(newField.id);
@@ -418,7 +420,32 @@ const TemplateBuilder = () => {
   };
 
   const updateField = (id: string, updates: Partial<FieldItem>) => {
-    setFields(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+    setFields((prev) =>
+      prev.map((f) => {
+        if (f.id !== id) return f;
+        const next: FieldItem = { ...f, ...updates };
+        // Auto-sync fieldKey from label (unless recipient_name or user has locked the key)
+        if (
+          updates.label !== undefined &&
+          !f.keyLocked &&
+          f.fieldKey !== "recipient_name" &&
+          updates.fieldKey === undefined
+        ) {
+          const base = slugifyKey(updates.label);
+          let candidate = base;
+          let n = 2;
+          while (prev.some((o) => o.id !== id && o.fieldKey === candidate)) {
+            candidate = `${base}_${n++}`;
+          }
+          next.fieldKey = candidate;
+        }
+        // If user edits fieldKey directly, lock it so future label edits don't override
+        if (updates.fieldKey !== undefined && updates.fieldKey !== f.fieldKey) {
+          next.keyLocked = true;
+        }
+        return next;
+      }),
+    );
   };
 
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
