@@ -34,7 +34,13 @@ interface FieldItem {
   textAlign: string;
   verticalAlign: "top" | "middle" | "bottom" | "baseline";
   maxWidth: number | null;
+  /** true → user manually set the fieldKey; do not auto-derive from label */
+  keyLocked?: boolean;
 }
+
+/** Slugify a label into a safe, unique field_key */
+const slugifyKey = (s: string): string =>
+  (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field";
 
 interface AssetPosition {
   x: number;
