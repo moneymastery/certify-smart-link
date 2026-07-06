@@ -251,25 +251,37 @@ const GenerateCertificates = () => {
         .eq("template_id", templateId)
         .order("sort_order");
       setTemplateFields(data || []);
-      // Auto-map: match field_key AND placeholder vars to CSV headers (case-insensitive, with underscore/space normalization)
+      // Auto-map: match on field_key AND label AND placeholder vars (case-insensitive,
+      // ignoring spaces/underscores/dashes/dots). Matching against the LABEL is the
+      // key improvement — most templates have opaque field_keys like `field_4` but
+      // human labels like "Roll No" that line up with the CSV header.
       if (data && csvHeaders.length > 0) {
         const autoMap: Record<string, string> = {};
-        const normalize = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, "");
-        const targets: { key: string; label: string }[] = [];
+        const normalize = (s: string) => (s || "").toLowerCase().replace(/[\s_\-.]+/g, "");
+        const targets: { key: string; matchers: string[]; label: string }[] = [];
         for (const f of data) {
           if (f.field_key === "recipient_name") continue;
           if (!f.label.includes("{{")) {
-            targets.push({ key: f.field_key, label: f.label });
+            // Try to match on both the field_key and the human label
+            targets.push({
+              key: f.field_key,
+              matchers: [f.field_key, f.label].filter(Boolean),
+              label: f.label,
+            });
           }
           const matches = f.label.matchAll(/\{\{(\w+)\}\}/g);
           for (const m of matches) {
-            targets.push({ key: m[1], label: `{{${m[1]}}}` });
+            targets.push({ key: m[1], matchers: [m[1]], label: `{{${m[1]}}}` });
           }
         }
         const unmatched: string[] = [];
         for (const t of targets) {
           if (autoMap[t.key]) continue;
-          const match = csvHeaders.find((h) => normalize(h) === normalize(t.key));
+          const normalizedMatchers = t.matchers.map(normalize);
+          const match = csvHeaders.find((h) => {
+            const nh = normalize(h);
+            return normalizedMatchers.some((nm) => nm === nh);
+          });
           if (match) autoMap[t.key] = match;
           else unmatched.push(t.label);
         }
