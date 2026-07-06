@@ -141,19 +141,30 @@ const Verify = () => {
 
   // Strict whitelist: if verification_fields exists (even empty), it is authoritative.
   // null/undefined → legacy fallback (show all non-PII).
+  // Matching is normalized (lowercase, non-alphanum → _) so a whitelist entry saved
+  // as either the canonical field_key ("date_of_issue") or a human label
+  // ("Date of Issue") resolves against a recipient_data key stored in either form.
   const toKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   const whitelist = branding?.verification_fields;
   const visibleFields: [string, string][] = (() => {
     if (!recipientData) return [];
     const entries = Object.entries(recipientData);
-    const skipPII = (k: string) => ["name","email","recipient_name","recipient_email"].includes(k.toLowerCase());
+    const skipPII = (k: string) => ["name", "email", "recipient_name", "recipient_email"].includes(k.toLowerCase());
     if (Array.isArray(whitelist)) {
-      const wlKeys = whitelist.map(toKey);
-      // Preserve user-chosen order
       const result: [string, string][] = [];
-      for (const wKey of wlKeys) {
+      const unresolved: string[] = [];
+      for (const w of whitelist) {
+        const wKey = toKey(w);
         const match = entries.find(([k]) => toKey(k) === wKey);
         if (match) result.push(match);
+        else unresolved.push(w);
+      }
+      if (unresolved.length > 0) {
+        // Surface the mismatch so we can debug user reports of "field missing on QR scan"
+        console.warn(
+          "[Verify] Whitelist entries did not resolve against recipient_data:",
+          { unresolved, availableKeys: entries.map(([k]) => k) },
+        );
       }
       return result;
     }
