@@ -278,6 +278,10 @@ const TemplateBuilder = () => {
           textAlign: f.text_align,
           verticalAlign: f.vertical_align || "middle",
           maxWidth: f.max_width,
+          // Fields loaded from DB have already been used to generate certificates —
+          // lock their keys so a later label edit doesn't silently rename them and
+          // break existing recipient_data lookups.
+          keyLocked: true,
         }));
         if (loadedFields.length > 0) setFields(loadedFields);
       } catch (err: any) {
