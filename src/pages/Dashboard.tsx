@@ -152,52 +152,79 @@ const Dashboard = () => {
     if (!oid) return;
     setOrgId(oid);
 
-    const [tempRes, certRes, batchRes] = await Promise.all([
-      supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
-      supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
-      supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+    // Run stat counts independently so one failure doesn't blank the whole overview.
+    // Verifications are counted via an embedded FK filter — a single tiny request,
+    // instead of fetching every certificate id and stuffing them into .in(...) which
+    // produces a URL too large for the edge proxy and hangs forever as (pending).
+    const settle = async <T,>(p: Promise<T>, label: string): Promise<T | null> => {
+      try { return await p; } catch (e) { console.error(`[dashboard] ${label} failed`, e); return null; }
+    };
+
+    const [tempRes, certRes, batchRes, verifRes] = await Promise.all([
+      settle(
+        supabase.from("templates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+        "templates count"
+      ),
+      settle(
+        supabase.from("certificates").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+        "certificates count"
+      ),
+      settle(
+        supabase.from("certificate_batches").select("id", { count: "exact", head: true }).eq("organization_id", oid),
+        "batches count"
+      ),
+      settle(
+        supabase
+          .from("certificate_verifications")
+          .select("id, certificate:certificates!inner(organization_id)", { count: "exact", head: true })
+          .eq("certificate.organization_id", oid),
+        "verifications count"
+      ),
     ]);
 
-    const { data: orgCerts } = await supabase.from("certificates").select("id").eq("organization_id", oid);
-    let verifCount = 0;
-    if (orgCerts && orgCerts.length > 0) {
-      const certIds = orgCerts.map((c) => c.id);
-      const { count } = await supabase.from("certificate_verifications").select("id", { count: "exact", head: true }).in("certificate_id", certIds);
-      verifCount = count || 0;
-    }
-
     setStats({
-      templates: tempRes.count || 0,
-      certificates: certRes.count || 0,
-      batches: batchRes.count || 0,
-      verifications: verifCount,
+      templates: tempRes?.count || 0,
+      certificates: certRes?.count || 0,
+      batches: batchRes?.count || 0,
+      verifications: verifRes?.count || 0,
     });
 
-    const { data: certs } = await supabase
-      .from("certificates")
-      .select("id, serial_number, recipient_name, status, issued_at, pdf_url, verification_token")
-      .eq("organization_id", oid)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (certs) setCertificates(certs);
+    const [certsRes, batchListRes, tmplRes] = await Promise.all([
+      settle(
+        supabase
+          .from("certificates")
+          .select("id, serial_number, recipient_name, status, issued_at, pdf_url, verification_token")
+          .eq("organization_id", oid)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        "certificates list"
+      ),
+      settle(
+        supabase
+          .from("certificate_batches")
+          .select("id, name, status, total_count, generated_count, created_at")
+          .eq("organization_id", oid)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        "batches list"
+      ),
+      settle(
+        supabase
+          .from("templates")
+          .select("id, name, created_at, background_url")
+          .eq("organization_id", oid)
+          .order("created_at", { ascending: false }),
+        "templates list"
+      ),
+    ]);
 
-    const { data: batchData } = await supabase
-      .from("certificate_batches")
-      .select("id, name, status, total_count, generated_count, created_at")
-      .eq("organization_id", oid)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (batchData) setBatches(batchData);
-
-    const { data: tmplData } = await supabase
-      .from("templates")
-      .select("id, name, created_at, background_url")
-      .eq("organization_id", oid)
-      .order("created_at", { ascending: false });
-    if (tmplData) setTemplates(tmplData);
+    if (certsRes?.data) setCertificates(certsRes.data);
+    if (batchListRes?.data) setBatches(batchListRes.data);
+    if (tmplRes?.data) setTemplates(tmplRes.data);
   };
 
   useEffect(() => { loadData(); }, [user]);
+
 
   // Filtered lists
   const filteredCerts = certSearch
