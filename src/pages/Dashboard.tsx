@@ -156,9 +156,10 @@ const Dashboard = () => {
     // Verifications are counted via an embedded FK filter — a single tiny request,
     // instead of fetching every certificate id and stuffing them into .in(...) which
     // produces a URL too large for the edge proxy and hangs forever as (pending).
-    const settle = async <T,>(p: Promise<T>, label: string): Promise<T | null> => {
+    const settle = async <T,>(p: PromiseLike<T>, label: string): Promise<T | null> => {
       try { return await p; } catch (e) { console.error(`[dashboard] ${label} failed`, e); return null; }
     };
+
 
     const [tempRes, certRes, batchRes, verifRes] = await Promise.all([
       settle(
